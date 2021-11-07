@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleMesh", "SimpleMesh\SimpleMesh.csproj", "{4F793E05-70B3-48F0-9490-A0076EDB747F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleOpenTK", "SampleOpenTK\SampleOpenTK.csproj", "{817209E3-09EA-4E25-9CCD-0889AD56714E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4F793E05-70B3-48F0-9490-A0076EDB747F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F793E05-70B3-48F0-9490-A0076EDB747F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F793E05-70B3-48F0-9490-A0076EDB747F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F793E05-70B3-48F0-9490-A0076EDB747F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

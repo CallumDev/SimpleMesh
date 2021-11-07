@@ -1,0 +1,67 @@
+# Folders
+obj/
+out/
+[Bb]in/
+[Dd]ebug/
+[Rr]elease/
+packages/
+
+# Visual Studio Profiling
+*.psess
+*.vspx
+
+#Project Rider
+.idea/
+
+#NuGet
+[Pp]ackages/
+
+#Cake
+tools/**
+!tools/packages.config
+
+# Visual Studio
+*.suo
+src/CommonVersion.props
+launchSettings.json
+*.pdb
+*.exp
+*.iobj
+*.ipdb
+*.lib
+*.user
+*.opendb
+.vs/
+.vscode/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace 
+
+# MonoDevelop
+*.userprefs
+
+# Gedit
+*~
+
+# OSX files
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.vsp
+/src/UpgradeLog.htm
+/src/LibreLancer.VC.VC.opendb
+*.db
