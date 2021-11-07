@@ -161,10 +161,15 @@ void main()
             using var stream = File.Create(filename);
             model.SaveTo(stream);
         }
+        
         void LoadModel(string filename)
         {
             using var stream = File.OpenRead(filename);
-            model = Model.FromStream(stream).AutoselectRoot(out _).CalculateBounds();
+            model = Model.FromStream(stream)
+                .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
+                .CalculateBounds(); //required for viewing purposes
+            
+            //Unbind vao so we don't delete the active one
             GL.BindVertexArray(0);
             if (vbo != 0)
             {
@@ -174,6 +179,7 @@ void main()
             }
 
             zoom = 1;
+            //Calculate size of buffers
             int vCount = 0;
             int iCount = 0;
             bool isIdx32 = false;
@@ -182,14 +188,15 @@ void main()
                 iCount += g.Indices.Length;
                 if (g.Indices.Indices32 != null) isIdx32 = true;
             }
-
+            //Copy from Geometry objects into one large buffer to upload to OpenGL
             Vertex[] vertices = new Vertex[vCount];
             ushort[] idx16 = isIdx32 ? (ushort[]) null : new ushort[iCount];
             uint[] idx32 = isIdx32 ? new uint[iCount] : (uint[]) null;
             vCount = iCount = 0;
             foreach (var g in model.Geometries)
             {
-                g.UserTag = new VertexOffset() {BaseVertex = vCount, StartIndex = iCount, Index32 = isIdx32};
+                //Store offset into OpenGL buffers in the UserTag field, allows us to render from a Model reference
+                g.UserTag = new BufferOffset() {BaseVertex = vCount, StartIndex = iCount, Index32 = isIdx32};
                 Array.Copy(g.Vertices, 0, vertices, vCount, g.Vertices.Length);
                 if(idx16 != null)
                     Array.Copy(g.Indices.Indices16, 0, idx16, iCount, g.Indices.Indices16.Length);
@@ -207,6 +214,7 @@ void main()
                 iCount += g.Indices.Length;
             }
 
+            //Upload data to OpenGL
             vao = GL.GenVertexArray();
             ebo = GL.GenBuffer();
             vbo = GL.GenBuffer();
@@ -229,7 +237,7 @@ void main()
             GL.BindVertexArray(0);
         }
 
-        class VertexOffset
+        class BufferOffset
         {
             public int BaseVertex;
             public int StartIndex;
@@ -240,18 +248,22 @@ void main()
         unsafe void DrawNode(ModelNode node, System.Numerics.Matrix4x4 parent)
         {
             var mymat = parent * node.Transform;
-            GL.UniformMatrix4(uniform_world, 1, false, (float*)&mymat);
-            Matrix4x4.Invert(mymat, out var normalmat);
-            normalmat = Matrix4x4.Transpose(normalmat);
-            GL.UniformMatrix4(uniform_normal, 1, false, (float*) &normalmat);
-            var off = (VertexOffset) node.Geometry.UserTag;
-            foreach (var tg in node.Geometry.Groups) {
-                GL.DrawElementsBaseVertex(
-                    PrimitiveType.Triangles, 
-                    tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, 
-                    (IntPtr)((tg.StartIndex + off.StartIndex) * (off.Index32 ? 4 : 2)), 
-                    off.BaseVertex + tg.BaseVertex
+            if (node.Geometry != null) //some models will have empty nodes purely for transforms
+            {
+                GL.UniformMatrix4(uniform_world, 1, false, (float*) &mymat);
+                Matrix4x4.Invert(mymat, out var normalmat);
+                normalmat = Matrix4x4.Transpose(normalmat);
+                GL.UniformMatrix4(uniform_normal, 1, false, (float*) &normalmat);
+                var off = (BufferOffset) node.Geometry.UserTag;
+                foreach (var tg in node.Geometry.Groups)
+                {
+                    GL.DrawElementsBaseVertex(
+                        PrimitiveType.Triangles,
+                        tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
+                        (IntPtr) ((tg.StartIndex + off.StartIndex) * (off.Index32 ? 4 : 2)),
+                        off.BaseVertex + tg.BaseVertex
                     );
+                }
             }
             foreach (var child in node.Children)
             {
@@ -285,12 +297,14 @@ void main()
             {
                 GL.UseProgram(shader.ID);
                 GL.BindVertexArray(vao);
+                //generate camera matrix based off model dimensions
                 var dist = model.Roots[0].Geometry.Radius;
                 var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60), (float) Size.X / Size.Y,
                     0.02f, 10000);
                 var view = Matrix4.LookAt(new Vector3(0, 0, (-dist * 4) * zoom), Vector3.Zero, Vector3.UnitY);
                 var vp = view * projection;
                 GL.UniformMatrix4(uniform_vp, false, ref vp);
+                //draw starting at first root node.
                 DrawNode(model.Roots[0], Matrix4x4.CreateRotationY(rotateY));
             }
             text = new Render2D();
