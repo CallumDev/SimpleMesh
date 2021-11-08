@@ -173,7 +173,10 @@ namespace SimpleMesh.Formats.GLTF
             {
                 throw new ModelLoadException("accessor must have type");
             }
-
+            if (element.TryGetProperty("byteOffset", out var offProp))
+            {
+                ByteOffset = offProp.GetInt32();
+            }
             if (element.TryGetProperty("normalized", out var normprop))
             {
                 Normalized = normprop.GetBoolean();

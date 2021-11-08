@@ -69,7 +69,16 @@ namespace SimpleMesh.Formats.GLTF
             {
                 if (!m.TryGetProperty("name", out var matname))
                     throw new ModelLoadException("material missing name property");
-                materials[k++] = new Material() { Name = matname.GetString(), DiffuseColor = Vector4.One };
+                var mat= new Material {Name = matname.GetString()};
+                if (m.TryGetProperty("pbrMetallicRoughness", out var pbr) &&
+                    pbr.TryGetProperty("baseColorFactor", out var baseCol))
+                {
+                    if (GetFloatArray(baseCol, 4, out var colFactor))
+                        mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
+                    else if (TryGetVector3(baseCol, out var colRgb))
+                        mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                }
+                materials[k++] = mat;
             }
             //Meshes
             var meshes = new Geometry[meshesElement.GetArrayLength()];
