@@ -64,9 +64,15 @@ namespace SimpleMesh.Formats.GLTF
                         if (normIndex != -1)
                             v.Normal = accessors[normIndex].GetVector3((int) index);
                         if (tex1Index != -1)
-                            v.Texture1 = accessors[normIndex].GetVector2((int) index);
+                        {
+                            v.Texture1 = accessors[tex1Index].GetVector2((int) index);
+                            v.Texture1.Y = 1 - v.Texture1.Y;
+                        }
                         if (tex2Index != -1)
+                        {
                             v.Texture2 = accessors[tex2Index].GetVector2((int) index);
+                            v.Texture2.Y = 1 - v.Texture2.Y;
+                        }
                         if (colIndex != -1)
                         {
                             if (accessors[colIndex].Type == AccessorType.VEC3)
@@ -88,9 +94,13 @@ namespace SimpleMesh.Formats.GLTF
                         if (normIndex != -1)
                             v.Normal = accessors[normIndex].GetVector3((int) index);
                         if (tex1Index != -1)
-                            v.Texture1 = accessors[normIndex].GetVector2((int) index);
+                        {
+                            v.Texture1 = accessors[tex1Index].GetVector2((int) index);
+                        }
                         if (tex2Index != -1)
+                        {
                             v.Texture2 = accessors[tex2Index].GetVector2((int) index);
+                        }
                         if (colIndex != -1)
                         {
                             if (accessors[colIndex].Type == AccessorType.VEC3)
