@@ -166,14 +166,22 @@ void main()
             using var stream = File.Create(filename);
             model.SaveTo(stream);
         }
-        
+
+        private int rootIndex = 0;
         void LoadModel(string filename)
         {
             using var stream = File.OpenRead(filename);
             model = Model.FromStream(stream)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
                 .CalculateBounds(); //required for viewing purposes
-            
+            for (int i = 0; i < model.Roots.Length; i++)
+            {
+                if (model.Roots[i].Geometry != null)
+                {
+                    rootIndex = i;
+                    break;
+                }
+            }
             //Unbind vao so we don't delete the active one
             GL.BindVertexArray(0);
             if (vbo != 0)
@@ -252,7 +260,7 @@ void main()
         //Unsafe required to use System.Numerics under OpenTK
         unsafe void DrawNode(ModelNode node, System.Numerics.Matrix4x4 parent)
         {
-            var mymat = parent * node.Transform;
+            var mymat = node.Transform * parent;
             if (node.Geometry != null) //some models will have empty nodes purely for transforms
             {
                 GL.UniformMatrix4(uniform_world, 1, false, (float*) &mymat);
@@ -314,14 +322,14 @@ void main()
                 GL.UseProgram(shader.ID);
                 GL.BindVertexArray(vao);
                 //generate camera matrix based off model dimensions
-                var dist = model.Roots[0].Geometry.Radius;
+                var dist = model.Roots[rootIndex].Geometry.Radius;
                 var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60), (float) Size.X / Size.Y,
                     0.02f, 10000);
                 var view = Matrix4.LookAt(new Vector3(0, 0, (-dist * 4) * zoom), Vector3.Zero, Vector3.UnitY);
                 var vp = view * projection;
                 GL.UniformMatrix4(uniform_vp, false, ref vp);
                 //draw starting at first root node.
-                DrawNode(model.Roots[0], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX));
+                DrawNode(model.Roots[rootIndex], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX));
             }
             text = new Render2D();
             text.Start(sz.X, sz.Y);

@@ -21,14 +21,25 @@ namespace SimpleMesh.Formats
             {
                 return SMesh.SMeshLoader.Load(stream, ctx);
             }
-
+            if (buf[0] == (byte) 'g' &&
+                buf[1] == (byte) 'l' &&
+                buf[2] == (byte) 'T' &&
+                buf[3] == (byte) 'F')
+            {
+                return GLTF.GLBLoader.Load(stream, ctx);
+            }
             //Text-based formats
             var encoding = DetectEncoding(buf, out int startIndex);
             if ((len - startIndex) < 2) throw new ModelLoadException("Unrecognised file format");
             var str = encoding.GetString(buf, startIndex, (len - startIndex));
-            if (str.TrimStart()[0] == '<')
+            var tStart = str.TrimStart();
+            if (tStart[0] == '<')
             {
                 return Collada.ColladaLoader.Load(stream, ctx);
+            } 
+            if (tStart[0] == '{')
+            {
+                return GLTF.GLTFLoader.Load(stream, ctx);
             }
             return Obj.ObjLoader.Load(stream, ctx);
         }

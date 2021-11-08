@@ -9,6 +9,7 @@ Current supported formats:
 
 * Collada (.dae)
 * Wavefront Obj (.obj)
+* GLTF 2.0 (.gltf/.glb) - with the restriction all buffers must be embedded in the file.
 
 Things SimpleMesh does not do:
 
