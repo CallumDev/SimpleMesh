@@ -63,6 +63,33 @@ namespace SimpleMesh.Formats.GLTF
                 k++;
             }
             //Load materials
+            string[] imageNames = null;
+            
+            if (jsonRoot.TryGetProperty("images", out var imagesElement))
+            {
+                k = 0;
+                imageNames = new string[imagesElement.GetArrayLength()];
+                foreach (var i in imagesElement.EnumerateArray())
+                {
+                    if (i.TryGetProperty("name", out var nameElem))
+                        imageNames[k] = nameElem.ToString();
+                    k++;
+                }
+            }
+
+            int[] textureSources = null;
+            if (jsonRoot.TryGetProperty("textures", out var texturesElement))
+            {
+                k = 0;
+                textureSources = new int[texturesElement.GetArrayLength()];
+                foreach (var i in texturesElement.EnumerateArray())
+                {
+                    if (i.TryGetProperty("source", out var sourceElem))
+                        textureSources[k] = sourceElem.GetInt32();
+                    k++;
+                }
+            }
+            
             var materials = new Material[materialsElement.GetArrayLength()];
             k = 0;
             foreach (var m in materialsElement.EnumerateArray())
@@ -70,13 +97,21 @@ namespace SimpleMesh.Formats.GLTF
                 if (!m.TryGetProperty("name", out var matname))
                     throw new ModelLoadException("material missing name property");
                 var mat= new Material {Name = matname.GetString()};
-                if (m.TryGetProperty("pbrMetallicRoughness", out var pbr) &&
-                    pbr.TryGetProperty("baseColorFactor", out var baseCol))
+                if (m.TryGetProperty("pbrMetallicRoughness", out var pbr))
                 {
-                    if (GetFloatArray(baseCol, 4, out var colFactor))
-                        mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
-                    else if (TryGetVector3(baseCol, out var colRgb))
-                        mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                    if (pbr.TryGetProperty("baseColorFactor", out var baseCol))
+                    {
+                        if (GetFloatArray(baseCol, 4, out var colFactor))
+                            mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
+                        else if (TryGetVector3(baseCol, out var colRgb))
+                            mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                    }
+                    if (pbr.TryGetProperty("baseColorTexture", out var texElem) 
+                        && textureSources != null 
+                        && imageNames != null && texElem.TryGetProperty("index", out var tex))
+                    {
+                        mat.DiffuseTexture = imageNames[textureSources[tex.GetInt32()]];
+                    }
                 }
                 materials[k++] = mat;
             }
