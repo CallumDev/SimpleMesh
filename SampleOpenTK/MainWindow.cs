@@ -53,12 +53,14 @@ varying vec4 diffuse;
 varying vec3 fragpos;
 varying vec3 normal;
 
+uniform vec4 mat_diffuse;
+
 void main()
 {
     vec3 norm = normalize(normal);
     vec3 lightDir = normalize(vec3(0,-10,-1000) - fragpos);  
     float diff = max(dot(norm, lightDir), 0.0);
-    gl_FragColor = diff * diffuse;
+    gl_FragColor = diff * (mat_diffuse * diffuse);
 }
 ";
 
@@ -84,6 +86,7 @@ void main()
         private int uniform_world;
         private int uniform_normal;
         private int uniform_vp;
+        private int uniform_mat_diffuse;
         protected override void OnLoad()
         {
             base.OnLoad();
@@ -91,6 +94,7 @@ void main()
             uniform_vp = shader.GetLocation("viewprojection");
             uniform_normal = shader.GetLocation("normalmat");
             uniform_world = shader.GetLocation("world");
+            uniform_mat_diffuse = shader.GetLocation("mat_diffuse");
             buttons.Add(new Button("Open...", 5, 5, () =>
             {
                 openfile = FilePicker.OpenFile();
@@ -145,6 +149,7 @@ void main()
         }
 
         private float rotateY = 0;
+        private float rotateX = 0;
         
 
         private Model model;
@@ -257,6 +262,8 @@ void main()
                 var off = (BufferOffset) node.Geometry.UserTag;
                 foreach (var tg in node.Geometry.Groups)
                 {
+                    GL.Uniform4(uniform_mat_diffuse, tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
+                        tg.Material.DiffuseColor.Z, 1);
                     GL.DrawElementsBaseVertex(
                         PrimitiveType.Triangles,
                         tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
@@ -284,15 +291,24 @@ void main()
             GL.Enable(EnableCap.DepthTest);
             GL.Disable(EnableCap.Blend);
 
-            if (this.IsKeyDown(Keys.Right))
+            if (IsKeyDown(Keys.Right))
             {
                 rotateY += (float) args.Time * 2;
             }
-
             if (IsKeyDown(Keys.Left))
             {
                 rotateY -= (float)args.Time * 2;
             }
+            
+            if (IsKeyDown(Keys.Up))
+            {
+                rotateX += (float) args.Time * 2;
+            }
+            if (IsKeyDown(Keys.Down))
+            {
+                rotateX -= (float)args.Time * 2;
+            }
+            
             if (model != null)
             {
                 GL.UseProgram(shader.ID);
@@ -305,7 +321,7 @@ void main()
                 var vp = view * projection;
                 GL.UniformMatrix4(uniform_vp, false, ref vp);
                 //draw starting at first root node.
-                DrawNode(model.Roots[0], Matrix4x4.CreateRotationY(rotateY));
+                DrawNode(model.Roots[0], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX));
             }
             text = new Render2D();
             text.Start(sz.X, sz.Y);
@@ -315,7 +331,7 @@ void main()
                 text.FillBackground(b.X, b.Y, bSz.X, bSz.Y);
                 text.DrawString(b.Text, b.X + 2, b.Y + 2);
             }
-            text.DrawString("Mouse Wheel - Zoom, Keyboard Left/Right - Rotate", 5, sz.Y - 60);
+            text.DrawString("Mouse Wheel - Zoom, Keyboard Up/Down/Left/Right - Rotate", 5, sz.Y - 60);
             if(openfile != null)
                 text.DrawString(openfile, 5, sz.Y - 30);
             
