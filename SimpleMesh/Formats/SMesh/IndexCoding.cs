@@ -104,17 +104,17 @@ namespace SimpleMesh.Formats.SMesh
                 {
                     var dist = (code & 0x3) - 2;
                     var idx = (code >> 2) & 0xF;
-                    indices[i] = (ushort) (buffer[idx] + dist);
+                    indices[i] = (uint) (buffer[idx] + dist);
                 }
                 else if ((code & 0xC0) == 0x40)
                 {
                     var dist = -((code & 0x3f) + 2);
-                    indices[i] = (ushort) (indices[i - 1] + dist);
+                    indices[i] = (uint) (indices[i - 1] + dist);
                 }
                 else if ((code & 0xC0) == 0x80)
                 {
                     var dist = (code & 0x3f) + 2;
-                    indices[i] = (ushort) (indices[i - 1] + dist);
+                    indices[i] = (uint) (indices[i - 1] + dist);
                 }
                 else
                 {
