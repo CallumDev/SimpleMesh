@@ -46,6 +46,8 @@ namespace SimpleMesh.Formats.Obj
             while (!reader.EndOfStream)
             {
                 var ln = reader.ReadLine().Trim();
+                //skip empty line
+                if(string.IsNullOrWhiteSpace(ln)) continue;
                 string param;
                 if (ln[0] == '#')
                 {
@@ -108,7 +110,7 @@ namespace SimpleMesh.Formats.Obj
                             attributes |= VertexAttributes.Texture1;
                             v.Texture1 = texcoords[ov.TexCoord];
                         }
-                        currentIndices.Add((uint)currentVertex.Add(ref v, 0));
+                        currentIndices.Add((uint)currentVertex.Add(ref v));
                     }
                 }
                 else if (IsParam(ln, 'o') && GetParam(ln, out string objname))
@@ -171,7 +173,8 @@ namespace SimpleMesh.Formats.Obj
                     currentMaterial = param;
                 }
                 else if (IsParam(ln, 's') ||
-                         StartsWithOrdinal(ln, "mtllib"))
+                         StartsWithOrdinal(ln, "mtllib") ||
+                         StartsWithOrdinal(ln, "usemap"))
                 {
                     //ignore
                 }

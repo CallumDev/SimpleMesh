@@ -338,7 +338,6 @@ namespace SimpleMesh.Formats.Collada
                             break;
                     }
                 }
-                int vertexOffset = vertices.Vertices.Count;
                 for (int i = 0; i <  indexCount; i++) {
                     int idx = i * pStride;
                     var vert = new Vertex(
@@ -348,14 +347,15 @@ namespace SimpleMesh.Formats.Collada
                         offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]),
                         offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2])
                     );
-                    indices.Add((uint)(vertices.Add(ref vert, vertexOffset) - vertexOffset));
+                    indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
                 }
                 groups.Add(new TriangleGroup() { 
                     StartIndex = startIdx,
-                    BaseVertex = vertexOffset,
+                    BaseVertex = vertices.BaseVertex,
                     IndexCount = indices.Count - startIdx,
                     Material = material
                 });
+                vertices.Chunk();
             }
 
             conv.Vertices = vertices.Vertices.ToArray();

@@ -4,47 +4,25 @@ namespace SimpleMesh
 {
     class VertexBufferBuilder
     {
-        public List<int> Hashes = new List<int>();
         public List<Vertex> Vertices = new List<Vertex>();
 
-        public int Add(ref Vertex vert, int startIndex)
+        public int BaseVertex { get; private set; }
+
+        private Dictionary<Vertex, int> indices = new Dictionary<Vertex, int>();
+        public void Chunk()
         {
-            var hash = HashVert(ref vert);
-            int idx = FindDuplicate(startIndex, ref vert, hash);
-            if (idx == -1)
+            indices = new Dictionary<Vertex, int>();
+            BaseVertex = Vertices.Count;
+        }
+        public int Add(ref Vertex vert)
+        {
+            if (!indices.TryGetValue(vert, out int idx))
             {
                 idx = Vertices.Count;
                 Vertices.Add(vert);
-                Hashes.Add(hash);
+                indices.Add(vert, idx);
             }
             return idx;
-        }
-        
-        int FindDuplicate(int startIndex, ref Vertex search, int hash)
-        {
-            for (int i = startIndex; i < Vertices.Count; i++) {
-                if (Hashes[i] != hash) continue;
-                if (Vertices[i].Position != search.Position) continue;
-                if (Vertices[i].Normal != search.Normal) continue;
-                if (Vertices[i].Texture1 != search.Texture1) continue;
-                if (Vertices[i].Diffuse != search.Diffuse) continue;
-                if (Vertices[i].Texture2 != search.Texture2) continue;
-                return i;
-            }
-            return -1;
-        }
-        
-        static int HashVert(ref Vertex vert)
-        {
-            unchecked {
-                int hash = (int)2166136261;
-                hash = hash * 16777619 ^ vert.Position.GetHashCode();
-                hash = hash * 16777619 ^ vert.Normal.GetHashCode();
-                hash = hash * 16777619 ^ vert.Texture1.GetHashCode();
-                hash = hash * 16777619 ^ vert.Texture2.GetHashCode();
-                hash = hash * 16777619 ^ vert.Diffuse.GetHashCode();
-                return hash;
-            }
         }
     }
 }

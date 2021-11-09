@@ -80,7 +80,7 @@ namespace SimpleMesh.Formats.GLTF
                             else
                                 v.Diffuse = accessors[colIndex].GetVector4((int) index);
                         }
-                        int idx = vertexArray.Add(ref v, vCount) - vCount;
+                        int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);
                     }
                 } 
@@ -108,19 +108,19 @@ namespace SimpleMesh.Formats.GLTF
                             else
                                 v.Diffuse = accessors[colIndex].GetVector4((int) index);
                         }
-                        int idx = vertexArray.Add(ref v, vCount) - vCount;
+                        int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);
                     }
                 }
                 
                 tg.Add(new TriangleGroup()
                 {
-                    BaseVertex = vCount,
+                    BaseVertex = vertexArray.BaseVertex,
                     IndexCount = indexArray.Count - startIndex,
                     StartIndex = startIndex,
                     Material = materials[matProp.GetInt32()]
                 });
-                vCount = vertexArray.Vertices.Count;
+                vertexArray.Chunk();
                 startIndex = indexArray.Count;
             }
 
