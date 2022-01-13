@@ -3,7 +3,7 @@
 SimpleMesh is a C# library for loading mesh geometry into an engine-agnostic format.
  It provides its own simple binary format to save imported meshes into for runtime load performance.
 
-Requires .NET 5.0 SDK to build.
+Requires .NET 6.0 SDK to build. The main SimpleMesh library can be built for .NET 5.0 or .NET 6.0
 
 Current supported formats:
 
