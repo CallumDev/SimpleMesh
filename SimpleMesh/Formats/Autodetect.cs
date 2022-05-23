@@ -49,7 +49,7 @@ namespace SimpleMesh.Formats
             if (bom[0] == 0x2b && bom[1] == 0x2f && bom[2] == 0x76)
             {
                 startIndex = 3;
-                return Encoding.UTF7;
+                throw new ModelLoadException("UTF-7 encoded files are forbidden");
             }
             if (bom[0] == 0xef && bom[1] == 0xbb && bom[2] == 0xbf)
             {

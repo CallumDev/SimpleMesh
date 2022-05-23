@@ -198,7 +198,6 @@ namespace SimpleMesh.Formats.Collada
             Dictionary<string, float[]> arrays = new Dictionary<string, float[]>();
             Dictionary<string, GeometrySource> verticesRefs = new Dictionary<string, GeometrySource>();
             
-            int placeHolderIdx = 0;
             //Get arrays
             foreach(var acc in msh.source) {
                 var arr = acc.Item as float_array;

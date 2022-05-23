@@ -15,7 +15,7 @@ namespace SimpleMesh.Formats.GLTF
             if (!element.TryGetProperty("primitives", out var primArray))
                 throw new ModelLoadException("mesh does not contain primitives");
             VertexBufferBuilder vertexArray = new VertexBufferBuilder();
-            int vCount = 0, startIndex = 0;
+            int startIndex = 0;
             List<uint> indexArray = new List<uint>();
             List<TriangleGroup> tg = new List<TriangleGroup>();
             g.Attributes = VertexAttributes.Position;
