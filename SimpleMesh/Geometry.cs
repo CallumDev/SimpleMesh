@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace SimpleMesh
@@ -49,5 +50,19 @@ namespace SimpleMesh
                 Vector3.Distance(Center, Max)
             );
         }
+
+        internal Geometry Clone(Model model) => new Geometry()
+            {
+                Name = Name,
+                Attributes = Attributes,
+                Vertices = Vertices.ToArray(),
+                Indices = Indices.Clone(),
+                Groups = Groups.Select(x => x.Clone(model)).ToArray(),
+                Center = Center,
+                Min = Min,
+                Max = Max,
+                Radius = Radius,
+                UserTag = UserTag
+            };
     }
 }

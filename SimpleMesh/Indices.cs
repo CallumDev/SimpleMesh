@@ -22,5 +22,12 @@ namespace SimpleMesh
         }
 
         public int Length => Indices32?.Length ?? Indices16.Length;
+        
+        internal Indices Clone()
+        {
+            if (Indices32 != null) return new Indices() {Indices32 = Indices32.ToArray()};
+            else if (Indices16 != null) return new Indices() {Indices16 = Indices16.ToArray()};
+            else return new Indices();
+        }
     }
 }

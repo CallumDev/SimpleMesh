@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -10,5 +11,25 @@ namespace SimpleMesh
         public Geometry Geometry;
         public List<ModelNode> Children = new List<ModelNode>();
         public Dictionary<string, string> Properties = new Dictionary<string, string>();
+
+        internal ModelNode Clone(Model newModel, Model existingModel)
+        {
+            var mn = new ModelNode();
+            mn.Name = Name;
+            mn.Transform = Transform;
+            if (Geometry != null)
+            {
+                var x = Array.IndexOf(existingModel.Geometries, Geometry);
+                if (x != -1)
+                    mn.Geometry = newModel.Geometries[x];
+                else
+                    mn.Geometry = Geometry.Clone(newModel);
+            }
+            mn.Children = new List<ModelNode>();
+            foreach(var c in Children)
+                mn.Children.Add(c.Clone(newModel, existingModel));
+            mn.Properties = new Dictionary<string, string>(Properties);
+            return mn;
+        }
     }
 }

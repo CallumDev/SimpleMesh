@@ -13,6 +13,7 @@ namespace SimpleMesh
         public ModelNode[] Roots;
         public Geometry[] Geometries;
         public Dictionary<string, Material> Materials;
+        
 
         public static Model FromStream(Stream stream)
         {
@@ -125,5 +126,18 @@ namespace SimpleMesh
         {
             SMeshWriter.Write(this, stream);
         }
+
+        public Model Clone()
+        {
+            var m = new Model();
+            var mats = new Dictionary<string, Material>();
+            foreach (var kv in Materials)
+                mats[kv.Key] = kv.Value.Clone();
+            m.Materials = mats;
+            m.Geometries = Geometries.Select(x => x.Clone(m)).ToArray();
+            m.Roots = Roots.Select(x => x.Clone(m, this)).ToArray();
+            return m;
+        }
+        
     }
 }
