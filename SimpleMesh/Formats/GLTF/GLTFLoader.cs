@@ -120,6 +120,10 @@ namespace SimpleMesh.Formats.GLTF
                         else if (TryGetVector3(baseCol, out var colRgb))
                             mat.DiffuseColor = new Vector4(colRgb, 1.0f);
                     }
+                    else
+                    {
+                        mat.DiffuseColor = Vector4.One;
+                    }
                     if (pbr.TryGetProperty("baseColorTexture", out var texElem) 
                         && textureSources != null 
                         && images != null && texElem.TryGetProperty("index", out var tex))
