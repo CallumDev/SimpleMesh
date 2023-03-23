@@ -63,16 +63,30 @@ namespace SimpleMesh.Formats.GLTF
                 k++;
             }
             //Load materials
-            string[] imageNames = null;
-            
+            ImageData[] images = null;
+            Dictionary<string, ImageData> referencedImages = null;
             if (jsonRoot.TryGetProperty("images", out var imagesElement))
             {
                 k = 0;
-                imageNames = new string[imagesElement.GetArrayLength()];
+                images = new ImageData[imagesElement.GetArrayLength()];
+                referencedImages = new Dictionary<string, ImageData>();
                 foreach (var i in imagesElement.EnumerateArray())
                 {
+                    string name = null;
+                    string mimeType = null;
+                    byte[] data = null;
                     if (i.TryGetProperty("name", out var nameElem))
-                        imageNames[k] = nameElem.ToString();
+                       name = nameElem.ToString();
+                    if (i.TryGetProperty("mimeType", out var mimeTypeElem))
+                        mimeType = mimeTypeElem.ToString();
+                    if (i.TryGetProperty("bufferView", out var bufferViewElem))
+                    {
+                        var idx = bufferViewElem.GetInt32();
+                        var bv = bufferViews[idx];
+                        data = new byte[bv.ByteLength];
+                        Array.Copy(bv.Buffer.Buffer, bv.ByteOffset, data, 0, bv.ByteLength);
+                    }
+                    images[k] = new ImageData(name, data, mimeType);
                     k++;
                 }
             }
@@ -108,9 +122,13 @@ namespace SimpleMesh.Formats.GLTF
                     }
                     if (pbr.TryGetProperty("baseColorTexture", out var texElem) 
                         && textureSources != null 
-                        && imageNames != null && texElem.TryGetProperty("index", out var tex))
+                        && images != null && texElem.TryGetProperty("index", out var tex))
                     {
-                        mat.DiffuseTexture = imageNames[textureSources[tex.GetInt32()]];
+                        var img = images[textureSources[tex.GetInt32()]];
+                        mat.DiffuseTexture = img.Name;
+                        if (img.Data != null) {
+                            referencedImages[img.Name] = img;
+                        }
                     }
                 }
                 materials[k++] = mat;
@@ -192,6 +210,8 @@ namespace SimpleMesh.Formats.GLTF
             model.Materials = new Dictionary<string, Material>();
             foreach (var mat in refMaterial)
                 model.Materials[mat.Name] = mat;
+            if (referencedImages.Count > 0)
+                model.Images = referencedImages;
             return model;
         }
 

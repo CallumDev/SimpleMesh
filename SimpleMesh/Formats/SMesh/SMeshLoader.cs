@@ -43,6 +43,20 @@ namespace SimpleMesh.Formats.SMesh
             {
                 model.Roots[i] = ReadNode(reader, model.Geometries, model.Materials);
             }
+            var imageCount = reader.Read7BitEncodedInt();
+            if (imageCount != 0)
+            {
+                imageCount--;
+                model.Images = new Dictionary<string, ImageData>();
+                for (int i = 0; i < imageCount; i++)
+                {
+                    var name = reader.ReadStringUTF8();
+                    var mime = reader.ReadStringUTF8();
+                    var len = reader.Read7BitEncodedInt();
+                    var data = reader.ReadBytes(len);
+                    model.Images[name] = new ImageData(name, data, mime);
+                }
+            }
             return model;
         }
 

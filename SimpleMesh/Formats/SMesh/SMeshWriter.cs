@@ -33,6 +33,19 @@ namespace SimpleMesh.Formats.SMesh
             {
                 WriteNode(n, model.Geometries, writer);
             }
+            if (model.Images != null) {
+                writer.Write7BitEncodedInt(1 + model.Images.Count);
+                foreach (var kv in model.Images) {
+                    writer.WriteStringUTF8(kv.Key);
+                    writer.WriteStringUTF8(kv.Value.MimeType);
+                    writer.Write7BitEncodedInt(kv.Value.Data.Length);
+                    writer.Write(kv.Value.Data);
+                }
+            }
+            else
+            {
+                writer.Write7BitEncodedInt(0);
+            }
         }
 
         static void WriteNode(ModelNode n, Geometry[] geometries, BinaryWriter writer)
