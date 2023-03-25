@@ -170,5 +170,13 @@ namespace SimpleMesh
             v = Vector3.Zero;
             return false;
         }
+
+        public static implicit operator PropertyValue(string s) => new(s);
+        public static implicit operator PropertyValue(float f) => new(f);
+        public static implicit operator PropertyValue(int i) => new(i);
+        public static implicit operator PropertyValue(int[] ia) => new(ia);
+        public static implicit operator PropertyValue(float[] fa) => new(fa);
+        public static implicit operator PropertyValue(Vector3 v3) => new(v3);
+        public static implicit operator PropertyValue(bool b) => new(b);
     }
 }
