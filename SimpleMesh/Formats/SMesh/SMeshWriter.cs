@@ -48,13 +48,52 @@ namespace SimpleMesh.Formats.SMesh
             }
         }
 
+        static void WriteProperty(PropertyValue prop, BinaryWriter writer)
+        {
+            switch (prop.Value)
+            {
+                case string s:
+                    writer.Write((byte)PropertyKind.String);
+                    writer.WriteStringUTF8(s);
+                    break;
+                case int i:
+                    writer.Write((byte)PropertyKind.Int);
+                    writer.Write(i);
+                    break;
+                case float f:
+                    writer.Write((byte)PropertyKind.Float);
+                    writer.Write(f);
+                    break;
+                case bool b:
+                    writer.Write((byte)PropertyKind.Boolean | (b ? 0x80: 0));
+                    break;
+                case int[] ia:
+                    writer.Write((byte) PropertyKind.IntArray);
+                    writer.Write7BitEncodedInt(ia.Length);
+                    foreach(var i in ia) writer.Write(i);
+                    break;
+                case float[] fa:
+                    writer.Write((byte)PropertyKind.FloatArray);
+                    writer.Write7BitEncodedInt(fa.Length);
+                    foreach(var f in fa) writer.Write(f);
+                    break;
+                case Vector3 v3:
+                    writer.Write((byte)PropertyKind.Vector3);
+                    writer.Write(v3);
+                    break;
+                default:
+                    writer.Write((byte)PropertyKind.Invalid);
+                    break;
+            }
+        }
+
         static void WriteNode(ModelNode n, Geometry[] geometries, BinaryWriter writer)
         {
             writer.WriteStringUTF8(n.Name);
             writer.Write7BitEncodedInt(n.Properties.Count);
             foreach (var kv in n.Properties) {
                 writer.WriteStringUTF8(kv.Key);
-                writer.WriteStringUTF8(kv.Value);
+                WriteProperty(kv.Value, writer);
             }
             if (n.Transform == Matrix4x4.Identity) {
                 writer.Write((byte)0);

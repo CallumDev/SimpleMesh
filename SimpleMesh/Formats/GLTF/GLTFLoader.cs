@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Text.Json;
 
@@ -12,6 +13,40 @@ namespace SimpleMesh.Formats.GLTF
         {
             using var reader = new StreamReader(stream);
             return Load(reader.ReadToEnd(), null, ctx);
+        }
+        
+        // ReSharper disable CompareOfFloatsByEqualityOperator
+
+        static bool NumberIsInteger(float f) => ((int) f) == f;
+
+        static PropertyValue PropertyFromJson(JsonElement value)
+        {
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Number:
+                    var f = value.GetSingle();
+                    if (NumberIsInteger(f))
+                        return new PropertyValue((int) f);
+                    return new PropertyValue(f);
+                case JsonValueKind.True:
+                    return new PropertyValue(true);
+                case JsonValueKind.False:
+                    return new PropertyValue(false);
+                case JsonValueKind.String:
+                    return new PropertyValue(value.GetString());
+                case JsonValueKind.Array:
+                    if (value.EnumerateArray().All(x => x.ValueKind == JsonValueKind.Number))
+                    {
+                        if (value.EnumerateArray().All(x => NumberIsInteger(x.GetSingle())))
+                        {
+                            return new PropertyValue(value.EnumerateArray().Select(x => (int)x.GetSingle()).ToArray());
+                        }
+                        return new PropertyValue(value.EnumerateArray().Select(x => x.GetSingle()).ToArray());
+                    }
+                    return new PropertyValue();
+                default:
+                    return new PropertyValue();
+            }
         }
 
         public static Model Load(string json, byte[] binchunk, ModelLoadContext ctx)
@@ -177,7 +212,7 @@ namespace SimpleMesh.Formats.GLTF
                 if (n.TryGetProperty("extras", out var extrasElem))
                 {
                     foreach(var prop in extrasElem.EnumerateObject())
-                        nodes[k].Properties.Add(prop.Name, prop.Value.ToString());
+                        nodes[k].Properties.Add(prop.Name, PropertyFromJson(prop.Value));
                 }
                 k++;
             }
@@ -251,7 +286,7 @@ namespace SimpleMesh.Formats.GLTF
             public Matrix4x4 Transform;
             public Geometry Geometry;
             public List<int> Children = new List<int>();
-            public Dictionary<string, string> Properties = new Dictionary<string, string>();
+            public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
         }
         
         

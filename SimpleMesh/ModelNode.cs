@@ -10,7 +10,7 @@ namespace SimpleMesh
         public Matrix4x4 Transform = Matrix4x4.Identity;
         public Geometry Geometry;
         public List<ModelNode> Children = new List<ModelNode>();
-        public Dictionary<string, string> Properties = new Dictionary<string, string>();
+        public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
 
         internal ModelNode Clone(Model newModel, Model existingModel)
         {
@@ -28,7 +28,7 @@ namespace SimpleMesh
             mn.Children = new List<ModelNode>();
             foreach(var c in Children)
                 mn.Children.Add(c.Clone(newModel, existingModel));
-            mn.Properties = new Dictionary<string, string>(Properties);
+            mn.Properties = new Dictionary<string, PropertyValue>(Properties);
             return mn;
         }
     }

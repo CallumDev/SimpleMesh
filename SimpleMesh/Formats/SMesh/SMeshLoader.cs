@@ -60,15 +60,42 @@ namespace SimpleMesh.Formats.SMesh
             return model;
         }
 
+        static PropertyValue ReadProperty(BinaryReader reader)
+        {
+            var d = reader.ReadByte();
+            switch ((PropertyKind)(d & 0x7F)) {
+                case PropertyKind.Boolean:
+                    return new PropertyValue((d & 0x80) != 0);
+                case PropertyKind.Float:
+                    return new PropertyValue(reader.ReadSingle());
+                case PropertyKind.FloatArray:
+                    var fa = new float[reader.Read7BitEncodedInt()];
+                    for (int i = 0; i < fa.Length; i++) fa[i] = reader.ReadSingle();
+                    return new PropertyValue(fa);
+                case PropertyKind.Int:
+                    return new PropertyValue(reader.ReadInt32());
+                case PropertyKind.IntArray:
+                    var ia = new int[reader.Read7BitEncodedInt()];
+                    for (int i = 0; i < ia.Length; i++) ia[i] = reader.ReadInt32();
+                    return new PropertyValue(ia);
+                case PropertyKind.String:
+                    return new PropertyValue(reader.ReadStringUTF8());
+                case PropertyKind.Vector3:
+                    return new PropertyValue(reader.ReadVector3());
+                default:
+                    return new PropertyValue();
+            }
+        }
+
         static ModelNode ReadNode(BinaryReader reader, Geometry[] geometries, Dictionary<string, Material> mats)
         {
             var node = new ModelNode();
             node.Name = reader.ReadStringUTF8();
             int propCount = reader.Read7BitEncodedInt();
-            node.Properties = new Dictionary<string, string>(propCount);
+            node.Properties = new Dictionary<string, PropertyValue>(propCount);
             for (int i = 0; i < propCount; i++)
             {
-                node.Properties[reader.ReadStringUTF8()] = reader.ReadStringUTF8();
+                node.Properties[reader.ReadStringUTF8()] = ReadProperty(reader);
             }
             var tr = reader.ReadByte();
             if (tr != 0) node.Transform = reader.ReadMatrix4x4();
