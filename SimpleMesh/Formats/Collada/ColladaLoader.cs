@@ -12,13 +12,12 @@ namespace SimpleMesh.Formats.Collada
 {
     static class ColladaLoader
     {
-        private static XmlSerializer xml = new XmlSerializer(typeof(COLLADA));
 
         public static Model Load(Stream stream, ModelLoadContext ctx)
         {
             COLLADA dae;
             using (var reader = new StreamReader(stream)) {
-                dae = (COLLADA)xml.Deserialize(reader);
+                dae = (COLLADA)ColladaXml.Xml.Deserialize(reader);
             }
             //Get libraries
             var geometrylib = dae.Items.OfType<library_geometries>().First();

@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using SimpleMesh.Formats;
+using SimpleMesh.Formats.Collada;
+using SimpleMesh.Formats.GLTF;
 using SimpleMesh.Formats.SMesh;
 
 namespace SimpleMesh
@@ -122,9 +124,22 @@ namespace SimpleMesh
             }
         }
 
-        public void SaveTo(Stream stream)
+        public void SaveTo(Stream stream, ModelSaveFormat format = ModelSaveFormat.SMesh)
         {
-            SMeshWriter.Write(this, stream);
+            switch (format)
+            {
+                case ModelSaveFormat.SMesh:
+                    SMeshWriter.Write(this, stream);
+                    break;
+                case ModelSaveFormat.GLTF2:
+                    GLTFWriter.Write(this, stream);
+                    break;
+                case ModelSaveFormat.Collada:
+                    ColladaWriter.Write(this, stream);
+                    break;
+                default:
+                    throw new ArgumentException( null, nameof(format));
+            }
         }
 
         public Model Clone()
