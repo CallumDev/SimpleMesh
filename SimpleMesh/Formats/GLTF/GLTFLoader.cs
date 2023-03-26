@@ -249,7 +249,7 @@ namespace SimpleMesh.Formats.GLTF
             model.Materials = new Dictionary<string, Material>();
             foreach (var mat in refMaterial)
                 model.Materials[mat.Name] = mat;
-            if (referencedImages.Count > 0)
+            if (referencedImages?.Count > 0)
                 model.Images = referencedImages;
             return model;
         }
