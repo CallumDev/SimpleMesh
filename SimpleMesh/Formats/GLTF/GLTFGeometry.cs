@@ -66,12 +66,10 @@ namespace SimpleMesh.Formats.GLTF
                         if (tex1Index != -1)
                         {
                             v.Texture1 = accessors[tex1Index].GetVector2((int) index);
-                            v.Texture1.Y = 1 - v.Texture1.Y;
                         }
                         if (tex2Index != -1)
                         {
                             v.Texture2 = accessors[tex2Index].GetVector2((int) index);
-                            v.Texture2.Y = 1 - v.Texture2.Y;
                         }
                         if (colIndex != -1)
                         {
