@@ -222,7 +222,7 @@ public class ColladaWriter
         {
             tex1 = CreateSource(
                 geo.name + "-tex1",
-                k => new Vector4(src.Vertices[k].Texture1, 0, 0), 
+                k => new Vector4(src.Vertices[k].Texture1.X, 1 - src.Vertices[k].Texture1.Y, 0, 0), 
                 2, src.Vertices.Length);
             sources.Add(tex1);
             idxC++;
@@ -231,7 +231,7 @@ public class ColladaWriter
         {
             tex2 = CreateSource(
                 geo.name + "-tex2",
-                k => new Vector4(src.Vertices[k].Texture2, 0, 0), 
+                k => new Vector4(src.Vertices[k].Texture2.X, 1 - src.Vertices[k].Texture2.Y, 0, 0), 
                 2, src.Vertices.Length);
             sources.Add(tex2);
             idxC++;

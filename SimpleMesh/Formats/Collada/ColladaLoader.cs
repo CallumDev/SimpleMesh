@@ -412,7 +412,7 @@ namespace SimpleMesh.Formats.Collada
                 var i = offset + (index * stride);
                 return new Vector2(
                     array[i],
-                    array[i + 1]
+                    1 - array[i + 1]
                 );
             }
         }
