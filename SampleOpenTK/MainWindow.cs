@@ -268,7 +268,7 @@ void main()
                     GL.Uniform4(uniform_mat_diffuse, tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
                         tg.Material.DiffuseColor.Z, 1);
                     GL.DrawElementsBaseVertex(
-                        PrimitiveType.Triangles,
+                        node.Geometry.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
                         tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
                         (IntPtr) ((tg.StartIndex + off.StartIndex) * (off.Index32 ? 4 : 2)),
                         off.BaseVertex + tg.BaseVertex

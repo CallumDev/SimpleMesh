@@ -19,6 +19,7 @@ namespace SimpleMesh.Formats.GLTF
             List<uint> indexArray = new List<uint>();
             List<TriangleGroup> tg = new List<TriangleGroup>();
             g.Attributes = VertexAttributes.Position;
+            int startMode = -1;
             foreach (var prim in primArray.EnumerateArray())
             {
                 if (!prim.TryGetProperty("attributes", out var attrArray))
@@ -26,6 +27,16 @@ namespace SimpleMesh.Formats.GLTF
                 
                 if (!prim.TryGetProperty("material", out var matProp))
                     throw new ModelLoadException("mesh primitive does not contain material");
+                
+                if (!prim.TryGetProperty("mode", out var modeProp) 
+                    || !modeProp.TryGetInt32(out var mode))
+                    mode = 4;
+
+                if (startMode != -1 && startMode != mode) {
+                    throw new ModelLoadException("mesh primitive has mismatching mode " + mode);
+                }
+                startMode = mode;
+
                 int posIndex = -1, normIndex = -1, tex1Index = -1, colIndex = -1, tex2Index = -1;
                 foreach (var elem in attrArray.EnumerateObject())
                 {
@@ -122,9 +133,21 @@ namespace SimpleMesh.Formats.GLTF
                 startIndex = indexArray.Count;
             }
 
+            switch (startMode)
+            {
+                case 4:
+                    g.Kind = GeometryKind.Triangles;
+                    break;
+                case 1:
+                    g.Kind = GeometryKind.Lines;
+                    break;
+                default:
+                    throw new Exception("Unsupported primitive mode " + startMode);
+            }
             g.Vertices = vertexArray.Vertices.ToArray();
             g.Indices = Indices.FromBuffer(indexArray.ToArray());
             g.Groups = tg.ToArray();
+            
             return g;
         }
     }

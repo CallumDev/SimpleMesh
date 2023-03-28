@@ -115,6 +115,7 @@ namespace SimpleMesh.Formats.SMesh
         {
             var g = new Geometry();
             g.Name = reader.ReadStringUTF8();
+            g.Kind = (GeometryKind) reader.ReadByte();
             g.Attributes = (VertexAttributes) reader.ReadUInt16();
             g.Center = reader.ReadVector3();
             g.Radius = reader.ReadSingle();

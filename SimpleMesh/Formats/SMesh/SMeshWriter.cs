@@ -131,6 +131,7 @@ namespace SimpleMesh.Formats.SMesh
         static void WriteGeometry(Geometry g, BinaryWriter writer)
         {
             writer.WriteStringUTF8(g.Name);
+            writer.Write((byte)g.Kind);
             writer.Write((ushort)g.Attributes);
             writer.Write(g.Center);
             writer.Write(g.Radius);

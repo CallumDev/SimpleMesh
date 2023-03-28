@@ -208,23 +208,31 @@ namespace SimpleMesh.Formats.Collada
             }
             //Process geometry
             foreach(var item in msh.Items) {
-                if(!(item is triangles || item is polylist || item is polygons)) {
+                if(!(item is triangles || item is polylist || item is polygons || item is lines)) {
                     ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
                 }
             }
+
+            GeometryKind kind = GeometryKind.Triangles;
+            bool set = false;
             foreach(var item in msh.Items.Where(x => x is triangles || x is polylist || x is polygons)) {
                 InputLocalOffset[] inputs;
                 int[] pRefs;
                 int indexCount;
                 string materialRef;
                 Material material;
-                if(item is triangles) {
-                    var triangles = (triangles)item;
+                if(item is triangles triangles) {
                     indexCount = (int)(triangles.count * 3);
                     pRefs = ParseHelpers.IntArray(triangles.p);
                     inputs = triangles.input;
                     materialRef = triangles.material;
-                } else if (item is polygons polygons)
+                    if (set && kind != GeometryKind.Triangles)
+                    {
+                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        continue;
+                    }
+                } 
+                else if (item is polygons polygons)
                 {
                     indexCount = (int)(polygons.count * 3);
                     int j = 0;
@@ -242,6 +250,22 @@ namespace SimpleMesh.Formats.Collada
                     }
                     inputs = polygons.input;
                     materialRef = polygons.material;
+                    if (set && kind != GeometryKind.Triangles)
+                    {
+                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        continue;
+                    }
+                } else if(item is lines lines) {
+                    indexCount = (int)(lines.count * 2);
+                    pRefs = ParseHelpers.IntArray(lines.p);
+                    inputs = lines.input;
+                    materialRef = lines.material;
+                    if (set && kind != GeometryKind.Lines)
+                    {
+                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        continue;
+                    }
+                    kind = GeometryKind.Lines;
                 } else  {
                     var plist = (polylist)item;
                     pRefs = ParseHelpers.IntArray(plist.p);
@@ -253,8 +277,14 @@ namespace SimpleMesh.Formats.Collada
                     materialRef = plist.material;
                     inputs = plist.input;
                     indexCount = (int)(plist.count * 3);
+                    if (set && kind != GeometryKind.Triangles)
+                    {
+                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        continue;
+                    }
                 }
                 if (indexCount == 0) continue; //Skip empty
+                set = true;
                 material = matlib.GetMaterial(materialRef);
                 int pStride = 0;
                 foreach (var input in inputs)
@@ -355,7 +385,7 @@ namespace SimpleMesh.Formats.Collada
                 });
                 vertices.Chunk();
             }
-
+            conv.Kind = kind;
             conv.Vertices = vertices.Vertices.ToArray();
             conv.Indices = Indices.FromBuffer(indices.ToArray());
             conv.Groups = groups.ToArray();

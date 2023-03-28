@@ -240,10 +240,7 @@ public class ColladaWriter
         var items = new List<object>();
         foreach (var dc in src.Groups)
         {
-            var trs = new CL.triangles();
-            trs.count = (ulong) (dc.IndexCount / 3);
-            if(dc.Material?.Name != null)
-                trs.material = dc.Material.Name + "-material";
+          
             List<int> pRefs = new List<int>(dc.IndexCount * idxC);
             List<CL.InputLocalOffset> inputs = new List<CL.InputLocalOffset>()
             {
@@ -281,7 +278,6 @@ public class ColladaWriter
                     source = "#" + tex2.id,
                     offset = off
                 });
-            trs.input = inputs.ToArray();
             for (int i = dc.StartIndex; i < dc.StartIndex + dc.IndexCount; i++)
             {
                 for (int j = 0; j < idxC; j++)
@@ -290,8 +286,26 @@ public class ColladaWriter
                     pRefs.Add((int)(dc.BaseVertex + idx));
                 }
             }
-            trs.p = string.Join(" ", pRefs.ToArray());
-            items.Add(trs);
+            if (src.Kind == GeometryKind.Triangles)
+            {
+                var trs = new CL.triangles();
+                trs.count = (ulong) (dc.IndexCount / 3);
+                if (dc.Material?.Name != null)
+                    trs.material = dc.Material.Name + "-material";
+                trs.input = inputs.ToArray();
+                trs.p = string.Join(" ", pRefs.ToArray());
+                items.Add(trs);
+            }
+            else
+            {
+                var ln = new CL.lines();
+                ln.count = (ulong) (dc.IndexCount / 2);
+                if (dc.Material?.Name != null)
+                    ln.material = dc.Material.Name + "-material";
+                ln.input = inputs.ToArray();
+                ln.p = string.Join(" ", pRefs.ToArray());
+                items.Add(ln);
+            }
         }
         mesh.Items = items.ToArray();
         return geo;

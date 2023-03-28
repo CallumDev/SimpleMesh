@@ -91,12 +91,15 @@ internal static class GLTFWriter
             var attrObject = new JsonObject();
             foreach (var o in attributes)
                 attrObject.Add(o.name, o.index);
-            groups.Add(new JsonObject
+            var prim = new JsonObject
             {
                 {"attributes", attrObject},
                 {"indices", ctx.AddIndices(indices)},
                 {"material", ctx.MaterialIndices[tg.Material]}
-            });
+            };
+            if(g.Kind == GeometryKind.Lines) 
+                prim.Add("mode", 1);
+            groups.Add(prim);
         }
 
         ctx.Geometries.Add(new JsonObject

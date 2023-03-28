@@ -8,6 +8,7 @@ namespace SimpleMesh
     public class Geometry
     {
         public string Name;
+        public GeometryKind Kind;
         public VertexAttributes Attributes;
         public Vertex[] Vertices;
         public Indices Indices;
@@ -54,6 +55,7 @@ namespace SimpleMesh
         internal Geometry Clone(Model model) => new Geometry()
             {
                 Name = Name,
+                Kind = Kind,
                 Attributes = Attributes,
                 Vertices = Vertices.ToArray(),
                 Indices = Indices.Clone(),
