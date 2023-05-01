@@ -52,6 +52,37 @@ namespace SimpleMesh
             return this;
         }
 
+        public Model ApplyScale()
+        {
+            foreach (var m in Roots) {
+                ApplyScale(m, Vector3.One);
+            }
+            return this;
+        }
+
+        static void ApplyScale(ModelNode node, Vector3 parentScale)
+        {
+            Matrix4x4.Decompose(node.Transform, out var scale, out var rotate, out var translate);
+            var myScale = scale * parentScale;
+            if (myScale != Vector3.One) {
+                if (node.Geometry != null)
+                {
+                    for (int i = 0; i < node.Geometry.Vertices.Length; i++)
+                    {
+                        node.Geometry.Vertices[i].Position *= myScale;
+                        node.Geometry.Vertices[i].Normal =
+                            Vector3.Normalize(myScale * node.Geometry.Vertices[i].Normal);
+                    }
+                }
+
+                node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
+                                 Matrix4x4.CreateTranslation(translate * myScale);
+            }
+            foreach (var child in node.Children) {
+                ApplyScale(child, myScale);
+            }
+        }
+        
         public Model ApplyRootTransforms(bool translate)
         {
             foreach (var m in Roots) {
