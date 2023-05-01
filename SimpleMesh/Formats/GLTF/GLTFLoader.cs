@@ -196,6 +196,7 @@ namespace SimpleMesh.Formats.GLTF
                 if (n.TryGetProperty("mesh", out var meshElement))
                     nodes[k].Geometry = meshes[meshElement.GetInt32()];
                 Vector3 translation = Vector3.Zero;
+                Vector3 scale = Vector3.One;
                 Quaternion rotation = Quaternion.Identity;
                 if (n.TryGetProperty("translation", out var trElem) &&
                     !TryGetVector3(trElem, out translation))
@@ -203,7 +204,11 @@ namespace SimpleMesh.Formats.GLTF
                 if (n.TryGetProperty("rotation", out var rotElem) &&
                     !TryGetQuaternion(rotElem, out rotation))
                     throw new ModelLoadException("node has malformed rotation element");
-                nodes[k].Transform = Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(translation);
+                if (n.TryGetProperty("scale", out var scElem) &&
+                    !TryGetVector3(scElem, out scale))
+                    throw new ModelLoadException("node has malformed scale element");
+                nodes[k].Transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) *
+                                     Matrix4x4.CreateTranslation(translation);
                 if (n.TryGetProperty("children", out var childElem))
                 {
                     foreach(var child in childElem.EnumerateArray())

@@ -118,10 +118,10 @@ internal static class GLTFWriter
         };
         if (n.Transform != Matrix4x4.Identity)
         {
-            Matrix4x4.Decompose(n.Transform, out _, out var rot, out _);
+            Matrix4x4.Decompose(n.Transform, out var scale, out var rot, out var translation);
             if (rot != Quaternion.Identity) json.Add("rotation", new JsonArray(rot.X, rot.Y, rot.Z, rot.W));
-            var t = Vector3.Transform(Vector3.Zero, n.Transform);
-            if (t != Vector3.Zero) json.Add("translation", new JsonArray(t.X, t.Y, t.Z));
+            if (scale != Vector3.One) json.Add("scale", new JsonArray(scale.X, scale.Y, scale.Z));
+            if (translation != Vector3.Zero) json.Add("translation", new JsonArray(translation.X, translation.Y, translation.Z));
         }
 
         if (n.Geometry != null)
