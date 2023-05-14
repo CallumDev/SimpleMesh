@@ -102,11 +102,11 @@ namespace SimpleMesh.Formats.Obj
                         var v = new Vertex() {
                             Position = positions[ov.Position], Diffuse = Vector4.One
                         };
-                        if (ov.Normal != 0) {
+                        if (ov.Normal != -1) {
                             attributes |= VertexAttributes.Normal;
                             v.Normal = normals[ov.Normal];
                         }
-                        if (ov.TexCoord != 0) {
+                        if (ov.TexCoord != -1) {
                             attributes |= VertexAttributes.Texture1;
                             v.Texture1 = texcoords[ov.TexCoord];
                         }
