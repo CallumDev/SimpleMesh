@@ -73,9 +73,6 @@ namespace SimpleMesh.Formats.GLTF
             if (!jsonRoot.TryGetProperty("meshes", out var meshesElement)) {
                 throw new ModelLoadException("glTF file contains no meshes");
             }
-            if (!jsonRoot.TryGetProperty("materials", out var materialsElement)) {
-                throw new ModelLoadException("glTF file contains no materials");
-            }
             var buffers = new GLTFBuffer[buffersElement.GetArrayLength()];
             int k = 0;
             foreach (var b in buffersElement.EnumerateArray())
@@ -138,40 +135,57 @@ namespace SimpleMesh.Formats.GLTF
                     k++;
                 }
             }
-            
-            var materials = new Material[materialsElement.GetArrayLength()];
-            k = 0;
-            foreach (var m in materialsElement.EnumerateArray())
+
+            Material[] materials;
+            if (jsonRoot.TryGetProperty("materials", out var materialsElement))
             {
-                if (!m.TryGetProperty("name", out var matname))
-                    throw new ModelLoadException("material missing name property");
-                var mat= new Material {Name = matname.GetString()};
-                if (m.TryGetProperty("pbrMetallicRoughness", out var pbr))
+                materials = new Material[materialsElement.GetArrayLength()];
+                k = 0;
+                foreach (var m in materialsElement.EnumerateArray())
                 {
-                    if (pbr.TryGetProperty("baseColorFactor", out var baseCol))
+                    if (!m.TryGetProperty("name", out var matname))
+                        throw new ModelLoadException("material missing name property");
+                    var mat = new Material {Name = matname.GetString()};
+                    if (m.TryGetProperty("pbrMetallicRoughness", out var pbr))
                     {
-                        if (GetFloatArray(baseCol, 4, out var colFactor))
-                            mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
-                        else if (TryGetVector3(baseCol, out var colRgb))
-                            mat.DiffuseColor = new Vector4(colRgb, 1.0f);
-                    }
-                    else
-                    {
-                        mat.DiffuseColor = Vector4.One;
-                    }
-                    if (pbr.TryGetProperty("baseColorTexture", out var texElem) 
-                        && textureSources != null 
-                        && images != null && texElem.TryGetProperty("index", out var tex))
-                    {
-                        var img = images[textureSources[tex.GetInt32()]];
-                        mat.DiffuseTexture = img.Name;
-                        if (img.Data != null) {
-                            referencedImages[img.Name] = img;
+                        if (pbr.TryGetProperty("baseColorFactor", out var baseCol))
+                        {
+                            if (GetFloatArray(baseCol, 4, out var colFactor))
+                                mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
+                            else if (TryGetVector3(baseCol, out var colRgb))
+                                mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                        }
+                        else
+                        {
+                            mat.DiffuseColor = Vector4.One;
+                        }
+
+                        if (pbr.TryGetProperty("baseColorTexture", out var texElem)
+                            && textureSources != null
+                            && images != null && texElem.TryGetProperty("index", out var tex))
+                        {
+                            var img = images[textureSources[tex.GetInt32()]];
+                            mat.DiffuseTexture = img.Name;
+                            if (img.Data != null)
+                            {
+                                referencedImages[img.Name] = img;
+                            }
                         }
                     }
+
+                    materials[k++] = mat;
                 }
-                materials[k++] = mat;
             }
+            else
+            {
+                materials = new Material[1];
+                materials[0] = new Material()
+                {
+                    Name = "default",
+                    DiffuseColor = Vector4.One
+                };
+            }
+
             //Meshes
             var meshes = new Geometry[meshesElement.GetArrayLength()];
             k = 0;
@@ -183,7 +197,7 @@ namespace SimpleMesh.Formats.GLTF
             
             //Load nodes and scene
             if (!jsonRoot.TryGetProperty("nodes", out var nodesElement)) {
-                throw new ModelLoadException("glTF file contains no materials");
+                throw new ModelLoadException("glTF file contains no objects");
             }
 
             var nodes = new GLTFNode[nodesElement.GetArrayLength()];

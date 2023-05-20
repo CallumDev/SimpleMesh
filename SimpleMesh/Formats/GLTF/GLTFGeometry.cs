@@ -24,10 +24,7 @@ namespace SimpleMesh.Formats.GLTF
             {
                 if (!prim.TryGetProperty("attributes", out var attrArray))
                     throw new ModelLoadException("mesh primitive does not contain attributes");
-                
-                if (!prim.TryGetProperty("material", out var matProp))
-                    throw new ModelLoadException("mesh primitive does not contain material");
-                
+
                 if (!prim.TryGetProperty("mode", out var modeProp) 
                     || !modeProp.TryGetInt32(out var mode))
                     mode = 4;
@@ -127,7 +124,8 @@ namespace SimpleMesh.Formats.GLTF
                     BaseVertex = vertexArray.BaseVertex,
                     IndexCount = indexArray.Count - startIndex,
                     StartIndex = startIndex,
-                    Material = materials[matProp.GetInt32()]
+                    Material =  prim.TryGetProperty("material", out var matProp)
+                     ? materials[matProp.GetInt32()] : materials[0]
                 });
                 vertexArray.Chunk();
                 startIndex = indexArray.Count;
