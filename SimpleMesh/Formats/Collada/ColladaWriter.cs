@@ -91,14 +91,21 @@ public class ColladaWriter
         };
         return string.Join(" ", floats.Select((x) => x.ToString(CultureInfo.InvariantCulture)));
     }
+
+    static string GetMatRef(object o)
+    {
+        if (o is CL.triangles tri) return tri.material;
+        if (o is CL.lines lines) return lines.material;
+        return null;
+    }
     
     static CL.instance_material[] GetMaterials(CL.geometry g)
     {
         var materials = new List<CL.instance_material>();
         foreach (var item in ((CL.mesh) g.Item).Items)
         {
-            string matref = ((CL.triangles) item).material;
-            if (!materials.Any((m) => m.symbol == matref))
+            var matref = GetMatRef(item);
+            if (!string.IsNullOrEmpty(matref) && !materials.Any((m) => m.symbol == matref))
             {
                 materials.Add(new CL.instance_material()
                 {
