@@ -215,7 +215,7 @@ namespace SimpleMesh.Formats.Collada
 
             GeometryKind kind = GeometryKind.Triangles;
             bool set = false;
-            foreach(var item in msh.Items.Where(x => x is triangles || x is polylist || x is polygons)) {
+            foreach(var item in msh.Items.Where(x => x is triangles || x is polylist || x is polygons || x is lines)) {
                 InputLocalOffset[] inputs;
                 int[] pRefs;
                 int indexCount;
