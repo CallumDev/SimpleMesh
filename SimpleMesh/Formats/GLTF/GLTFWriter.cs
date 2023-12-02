@@ -145,6 +145,70 @@ internal static class GLTFWriter
             CreateNode(child, ctx);
     }
 
+    static JsonObject CreateAnimationNode(Animation anm, GLTFContext ctx)
+    {
+        var json = new JsonObject
+        {
+            {"name", anm.Name},
+        };
+        List<JsonNode> samplers = new List<JsonNode>();
+        List<JsonNode> channels = new List<JsonNode>();
+        foreach (var ch in anm.Rotations)
+        {
+            var times = ctx.AddFloats(ch.Keyframes.Select(x => x.Time).ToArray());
+            var quats = ctx.AddQuaternions(ch.Keyframes.Select(x => x.Rotation).ToArray());
+            var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
+            if (mn.Key == null) continue;
+            samplers.Add(new JsonObject
+            {
+                {"input", times},
+                {"interpolation", "LINEAR"},
+                {"output", quats},
+            });
+            channels.Add(new JsonObject
+            {
+                {"sampler", (samplers.Count - 1)},
+                {
+                    "target", new JsonObject
+                    {
+                        {"node", mn.Value},
+                        {"path", "rotation"}
+                    }
+                }
+            });
+        }
+
+        foreach (var ch in anm.Translations)
+        {
+            var times = ctx.AddFloats(ch.Keyframes.Select(x => x.Time).ToArray());
+            var vecs = ctx.AddVector3(ch.Keyframes.Select(x => x.Translation).ToArray(), true);
+            var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
+            if (mn.Key == null) continue;
+            samplers.Add(new JsonObject
+            {
+                {"input", times},
+                {"interpolation", "LINEAR"},
+                {"output", vecs},
+            });
+            channels.Add(new JsonObject
+            {
+                {"sampler", (samplers.Count - 1)},
+                {
+                    "target", new JsonObject
+                    {
+                        {"node", mn.Value},
+                        {"path", "translation"}
+                    }
+                }
+            });
+        }
+
+
+        json.Add("samplers", new JsonArray(samplers.ToArray()));
+        json.Add("channels", new JsonArray(channels.ToArray()));
+        return json;
+    }
+
     public static void Write(Model model, Stream outStream)
     {
         var json = new JsonObject();
@@ -173,6 +237,11 @@ internal static class GLTFWriter
         json.Add("nodes", new JsonArray(ctx.Nodes));
         json.Add("materials", new JsonArray(jsonMats.ToArray()));
         json.Add("meshes", new JsonArray(ctx.Geometries.ToArray()));
+        if (model.Animations != null)
+        {
+            var anms = new JsonArray(model.Animations.Select(x => CreateAnimationNode(x, ctx)).ToArray());
+            json.Add("animations", anms);
+        }
         json.Add("accessors", new JsonArray(ctx.Accessors.ToArray()));
         json.Add("bufferViews", new JsonArray(ctx.BufferViews.ToArray()));
         var buffer = bufferStream.ToArray();
@@ -257,6 +326,42 @@ internal static class GLTFWriter
                 {"componentType", 5126}, //float
                 {"count", source.Length},
                 {"type", "VEC2"}
+            });
+            return Accessors.Count - 1;
+        }
+
+        public int AddQuaternions(Quaternion[] source)
+        {
+            var byteStart = (int) BufferWriter.BaseStream.Position;
+            var byteLength = source.Length * 16;
+            foreach (var q in source)
+            {
+                BufferWriter.Write(q.X);
+                BufferWriter.Write(q.Y);
+                BufferWriter.Write(q.Z);
+                BufferWriter.Write(q.W);
+            }
+            Accessors.Add(new JsonObject
+            {
+                {"bufferView", CreateBufferView(byteStart, byteLength, true)},
+                {"componentType", 5126}, //float
+                {"count", source.Length},
+                {"type", "VEC4"}
+            });
+            return Accessors.Count - 1;
+        }
+        public int AddFloats(float[] source)
+        {
+            var byteStart = (int) BufferWriter.BaseStream.Position;
+            var byteLength = source.Length * 4;
+            foreach (var f in source)
+                BufferWriter.Write(f);
+            Accessors.Add(new JsonObject
+            {
+                {"bufferView", CreateBufferView(byteStart, byteLength, true)},
+                {"componentType", 5126}, //float
+                {"count", source.Length},
+                {"type", "SCALAR"}
             });
             return Accessors.Count - 1;
         }

@@ -304,6 +304,11 @@ namespace SimpleMesh.Formats.GLTF
             throw new ModelLoadException("Indices can only be unsigned int or unsigned short");
         }
 
+        public float GetFloat(int i)
+        {
+            var off = ByteOffset + BufferView.ByteOffset + (GetStride() * i);
+            return GetComponent(off, 0);
+        }
         public Vector2 GetVector2(int i)
         {
             var off = ByteOffset + BufferView.ByteOffset + (GetStride() * i);
@@ -319,7 +324,7 @@ namespace SimpleMesh.Formats.GLTF
         public Vector4 GetVector4(int i)
         {
             var off = ByteOffset + BufferView.ByteOffset + (GetStride() * i);
-            return new Vector4(GetComponent(off, 0), GetComponent(off, 1), GetComponent(off, 2), GetComponent(off, 4));
+            return new Vector4(GetComponent(off, 0), GetComponent(off, 1), GetComponent(off, 2), GetComponent(off, 3));
         }
     }
 

@@ -52,7 +52,7 @@ void main()
             }
         }
 
-        private Vertex[] vertices = new Vertex[1024];
+        private Vertex[] vertices = new Vertex[16384];
         private int vCount = 0;
         private int texture;
         public unsafe Render2D()
@@ -84,7 +84,7 @@ void main()
             vbo = GL.GenBuffer();
             GL.BindVertexArray(vao);
             GL.BindBuffer(BufferTarget.ArrayBuffer, vbo);
-            GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(4 * sizeof(float) * 1024), IntPtr.Zero, BufferUsageHint.StreamDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(4 * sizeof(float) * 16384), IntPtr.Zero, BufferUsageHint.StreamDraw);
             GL.EnableVertexAttribArray(0);
             GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 0);
             GL.EnableVertexAttribArray(3);

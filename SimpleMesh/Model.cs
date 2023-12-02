@@ -16,6 +16,7 @@ namespace SimpleMesh
         public Geometry[] Geometries;
         public Dictionary<string, Material> Materials;
         public Dictionary<string, ImageData> Images;
+        public Animation[] Animations;
 
         public static Model FromStream(Stream stream)
         {
@@ -182,6 +183,8 @@ namespace SimpleMesh
             m.Materials = mats;
             m.Geometries = Geometries.Select(x => x.Clone(m)).ToArray();
             m.Roots = Roots.Select(x => x.Clone(m, this)).ToArray();
+            if(Animations != null)
+                m.Animations = Animations.Select(x => x.Clone()).ToArray();
             if (Images != null)
                 m.Images = new Dictionary<string, ImageData>(Images);
             return m;

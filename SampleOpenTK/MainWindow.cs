@@ -21,8 +21,6 @@ namespace SampleOpenTK
         private Render2D text;
         public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
-            gameWindowSettings.IsMultiThreaded = false;
-            nativeWindowSettings.Size = new Vector2i(800, 600);
         }
 
         private const string VERTEX_SHADER = @"
@@ -88,6 +86,11 @@ void main()
         private int uniform_normal;
         private int uniform_vp;
         private int uniform_mat_diffuse;
+        private AnimationHandler animations;
+
+        private Button openButton;
+        private Button saveButton;
+        private Button saveGltfButton;
         protected override void OnLoad()
         {
             base.OnLoad();
@@ -96,18 +99,26 @@ void main()
             uniform_normal = shader.GetLocation("normalmat");
             uniform_world = shader.GetLocation("world");
             uniform_mat_diffuse = shader.GetLocation("mat_diffuse");
-            buttons.Add(new Button("Open...", 5, 5, () =>
+            openButton = new Button("Open...", 5, 5, () =>
             {
                 openfile = FilePicker.OpenFile();
-                if(openfile != null)
+                if (openfile != null)
                     LoadModel(openfile);
-            }));
-            buttons.Add(new Button("Save To Binary", 5, 40, () =>
+            });
+            saveButton = new Button("Save To Binary", 5, 40, () =>
             {
                 var savefile = FilePicker.SaveFile();
                 if (savefile != null)
-                    SaveModel(savefile);
-            }));
+                    SaveModel(savefile, false);
+            });
+            saveGltfButton = new Button("Save To GLTF", 5, 75, () =>
+            {
+                var savefile = FilePicker.SaveFile();
+                if (savefile != null)
+                    SaveModel(savefile, true);
+            });
+            buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
+            text = new Render2D();
         }
 
         private Button down = null;
@@ -161,15 +172,16 @@ void main()
 
         private static readonly int VERTEX_SIZE = Marshal.SizeOf<Vertex>();
 
-        void SaveModel(string filename)
+        void SaveModel(string filename, bool gltf)
         {
             if (model == null) return;
             using var stream = File.Create(filename);
-            model.SaveTo(stream);
+            model.SaveTo(stream, gltf ? ModelSaveFormat.GLTF2 : ModelSaveFormat.SMesh);
         }
 
         void LoadModel(string filename)
         {
+            animations = new AnimationHandler();
             var sw = Stopwatch.StartNew();
             using var stream = File.OpenRead(filename);
             model = Model.FromStream(stream)
@@ -243,6 +255,18 @@ void main()
             else
                 GL.BufferData(BufferTarget.ElementArrayBuffer, sizeof(ushort) * idx16.Length, idx16, BufferUsageHint.StaticDraw);
             GL.BindVertexArray(0);
+            
+            buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
+            int y = 5;
+            if (model.Animations != null)
+            {
+                foreach (var anim in model.Animations)
+                {
+                    buttons.Add(new Button(anim.Name ?? "ANIMATION", 200, y,
+                        () => { animations.Instances.Add(new AnimationInstance() {Animation = anim}); }));
+                    y += 35;
+                }
+            }
         }
 
         class BufferOffset
@@ -253,9 +277,21 @@ void main()
         }
         
         //Unsafe required to use System.Numerics under OpenTK
-        unsafe void DrawNode(ModelNode node, System.Numerics.Matrix4x4 parent)
+        unsafe void DrawNode(ModelNode node, Matrix4x4 parent)
         {
-            var mymat = node.Transform * parent;
+            var (animTranslate, animRotate) = animations.GetAnimated(node.Name, out var tr, out var rot);
+            Matrix4x4 selfTransform;
+            Matrix4x4.Decompose(node.Transform, out _, out var nodeRotate, out var nodeTranslate);
+            if (animTranslate && !animRotate)
+                selfTransform = Matrix4x4.CreateFromQuaternion(nodeRotate) * Matrix4x4.CreateTranslation(tr);
+            else if (animRotate && !animTranslate)
+                selfTransform = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(nodeTranslate);
+            else if (animTranslate && animRotate)
+                selfTransform = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(tr);
+            else
+                selfTransform = node.Transform;
+            //
+            var mymat = selfTransform * parent;
             if (node.Geometry != null) //some models will have empty nodes purely for transforms
             {
                 GL.UniformMatrix4(uniform_world, 1, false, (float*) &mymat);
@@ -286,7 +322,8 @@ void main()
         private string openfile = null;
         protected override void OnRenderFrame(FrameEventArgs args)
         {
-            var sz = this.Size;
+            animations?.Update((float)args.Time);
+            var sz = this.ClientSize;
             GL.Viewport(0, 0, sz.X, sz.Y);
             GL.ClearColor(Color4.Blue);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -333,7 +370,6 @@ void main()
                     DrawNode(model.Roots[i], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX));
                 }
             }
-            text = new Render2D();
             text.Start(sz.X, sz.Y);
             foreach (var b in buttons)
             {
@@ -351,7 +387,9 @@ void main()
 
         static void Main(string[] args)
         {
-            new MainWindow(GameWindowSettings.Default, NativeWindowSettings.Default).Run();
+            var settings = NativeWindowSettings.Default;
+            settings.Size = new Vector2i(1024, 768);
+            new MainWindow(GameWindowSettings.Default, settings).Run();
         }
     }
 }

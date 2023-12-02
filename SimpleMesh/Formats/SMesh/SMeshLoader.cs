@@ -57,6 +57,46 @@ namespace SimpleMesh.Formats.SMesh
                     model.Images[name] = new ImageData(name, data, mime);
                 }
             }
+            var animationCount = reader.Read7BitEncodedInt();
+            if (animationCount != 0)
+            {
+                animationCount--;
+                model.Animations = new Animation[animationCount];
+                for (int i = 0; i < animationCount; i++)
+                {
+                    var anm = new Animation();
+                    anm.Name = reader.ReadStringUTF8();
+                    anm.Rotations = new RotationChannel[reader.Read7BitEncodedInt()];
+                    for (int j = 0; j < anm.Rotations.Length; j++)
+                    {
+                        var r = new RotationChannel();
+                        r.Target = reader.ReadStringUTF8();
+                        r.Keyframes = new RotationKeyframe[reader.Read7BitEncodedInt()];
+                        for (int k = 0; k < r.Keyframes.Length; k++)
+                        {
+                            r.Keyframes[k].Time = reader.ReadSingle();
+                            r.Keyframes[k].Rotation = new Quaternion(
+                                reader.ReadSingle(), reader.ReadSingle(),
+                                reader.ReadSingle(), reader.ReadSingle());
+                        }
+                        anm.Rotations[j] = r;
+                    }
+                    anm.Translations = new TranslationChannel[reader.Read7BitEncodedInt()];
+                    for (int j = 0; j < anm.Translations.Length; j++)
+                    {
+                        var t = new TranslationChannel();
+                        t.Target = reader.ReadStringUTF8();
+                        t.Keyframes = new TranslationKeyframe[reader.Read7BitEncodedInt()];
+                        for (int k = 0; k < t.Keyframes.Length; k++)
+                        {
+                            t.Keyframes[k].Time = reader.ReadSingle();
+                            t.Keyframes[k].Translation = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        }
+                        anm.Translations[j] = t;
+                    }
+                    model.Animations[i] = anm;
+                }
+            }
             return model;
         }
 

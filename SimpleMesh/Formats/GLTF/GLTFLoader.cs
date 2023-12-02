@@ -258,6 +258,18 @@ namespace SimpleMesh.Formats.GLTF
                 sceneIndex = sceneElement.GetInt32();
             }
 
+            Animation[] animarray = null;
+            if (jsonRoot.TryGetProperty("animations", out var animationsElement))
+            {
+                var anims = new List<Animation>();
+                var names = nodes.Select(x => x.Name).ToArray();
+                foreach (var obj in animationsElement.EnumerateArray())
+                {
+                    anims.Add(GLTFAnimation.FromGLTF(obj, accessors, names));
+                }
+                animarray = anims.ToArray();
+            }
+
             List<Geometry> refGeometry = new List<Geometry>();
             List<Material> refMaterial = new List<Material>();
             var model = new Model();
@@ -270,6 +282,7 @@ namespace SimpleMesh.Formats.GLTF
                 model.Materials[mat.Name] = mat;
             if (referencedImages?.Count > 0)
                 model.Images = referencedImages;
+            model.Animations = animarray;
             return model;
         }
 

@@ -46,6 +46,42 @@ namespace SimpleMesh.Formats.SMesh
             {
                 writer.Write7BitEncodedInt(0);
             }
+
+            if (model.Animations != null)
+            {
+                writer.Write7BitEncodedInt(1 + model.Animations.Length);
+                foreach (var anim in model.Animations)
+                {
+                    writer.WriteStringUTF8(anim.Name);
+                    writer.Write7BitEncodedInt(anim.Rotations.Length);
+                    foreach (var rot in anim.Rotations) {
+                        writer.WriteStringUTF8(rot.Target);
+                        writer.Write7BitEncodedInt(rot.Keyframes.Length);
+                        foreach (var kf in rot.Keyframes) {
+                            writer.Write(kf.Time);
+                            writer.Write(kf.Rotation.X);
+                            writer.Write(kf.Rotation.Y);
+                            writer.Write(kf.Rotation.Z);
+                            writer.Write(kf.Rotation.W);
+                        }
+                    }
+                    writer.Write7BitEncodedInt(anim.Translations.Length);
+                    foreach (var tr in anim.Translations) {
+                        writer.WriteStringUTF8(tr.Target);
+                        writer.Write7BitEncodedInt(tr.Keyframes.Length);
+                        foreach (var kf in tr.Keyframes) {
+                            writer.Write(kf.Time);
+                            writer.Write(kf.Translation.X);
+                            writer.Write(kf.Translation.Y);
+                            writer.Write(kf.Translation.Z);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                writer.Write7BitEncodedInt(0);
+            }
         }
 
         static void WriteProperty(PropertyValue prop, BinaryWriter writer)
