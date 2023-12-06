@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -9,9 +10,10 @@ namespace SimpleMesh.Formats.Obj
 {
     public static class ObjLoader
     {
+        private const int STREAMREADER_BUFFER_SIZE = 32768;
         public static Model Load(Stream stream, ModelLoadContext ctx)
         {
-            using var reader = new StreamReader(stream);
+            using var reader = new StreamReader(stream, null, true, STREAMREADER_BUFFER_SIZE);
             int lineNo = 1;
 
             List<Vector3> positions = new List<Vector3>();
@@ -42,51 +44,71 @@ namespace SimpleMesh.Formats.Obj
                 }
                 return x;
             }
+
+            string src_line;
             
-            while (!reader.EndOfStream)
+            Span<float> pos = stackalloc float[3];
+            Span<float> norm = stackalloc float[3];
+            Span<float> tex = stackalloc float[2];
+
+            Span<ParseHelpers.SplitElement> maxFacePoints = stackalloc ParseHelpers.SplitElement[512];
+            Span<ObjVertex> faceElements = stackalloc ObjVertex[512];
+            Span<ObjVertex> triangulatedElements = stackalloc ObjVertex[512];
+            
+            while ((src_line = reader.ReadLine()) != null)
             {
-                var ln = reader.ReadLine().Trim();
+                var ln = src_line.AsSpan().Trim();
                 //skip empty line
-                if(string.IsNullOrWhiteSpace(ln)) continue;
-                string param;
+                if(ln.IsWhiteSpace()) continue;
+                ReadOnlySpan<char> param;
                 if (ln[0] == '#')
                 {
                     //do nothing
                 }
                 else if (IsParam(ln, 'v') && GetParam(ln, out param))
                 {
-                    var pos = ParseHelpers.FloatArray(param);
-                    if(pos.Length != 3)
+                    if(ParseHelpers.FloatSpan(param, pos) != 3)
                         throw new ModelLoadException($"Invalid vertex element at line {lineNo}");
                     positions.Add(new Vector3(pos[0], pos[1], pos[2]));
                 }
                 else if (IsParam(ln, 'v', 'n') && GetParam(ln, out param))
                 {
-                    var n = ParseHelpers.FloatArray(param);
-                    if(n.Length != 3)
+                    if(ParseHelpers.FloatSpan(param, norm) != 3)
                         throw new ModelLoadException($"Invalid normal element at line {lineNo}");
-                    normals.Add(new Vector3(n[0], n[1], n[2]));
+                    normals.Add(new Vector3(norm[0], norm[1], norm[2]));
                 }
                 else if (IsParam(ln, 'v', 't') && GetParam(ln, out param))
                 {
-                    var t = ParseHelpers.FloatArray(param);
-                    if(t.Length != 2)
+                    if(ParseHelpers.FloatSpan(param, tex) != 2)
                         throw new ModelLoadException($"Invalid texture element at line {lineNo}");
-                    texcoords.Add(new Vector2(t[0], t[1]));
+                    texcoords.Add(new Vector2(tex[0], tex[1]));
                 }
                 else if (IsParam(ln, 'v', 'p'))
                 {
                     throw new ModelLoadException($"Non-polygon data not supported. (Line {lineNo})");
                 }
+                else if (IsParam(ln ,'l'))
+                {
+                    //Ignore
+                }
                 else if (IsParam(ln, 'f') && GetParam(ln, out param))
                 {
-                    var vtx = ParseHelpers.Tokens(param).Select(x => ParseVertex(x, lineNo)).ToArray();
+                    var fCount = ParseHelpers.FixedSplit(param, maxFacePoints);
+                    if(fCount < 3)
+                        throw new ModelLoadException($"Bad face element at line {lineNo}");
+                    if (fCount == int.MaxValue)
+                        throw new ModelLoadException($"Too many elements in f at line {lineNo}");
+                    for (int i = 0; i < fCount; i++)
+                    {
+                        faceElements[i] = ParseVertex(param.Slice(maxFacePoints[i].Start, maxFacePoints[i].Length), lineNo);
+                    }
+                    Span<ObjVertex> vtx = faceElements.Slice(0, fCount);
                     if(vtx.Length < 3)
-                        throw new ModelLoadException($"Bad face element at line {ln}");
+                        throw new ModelLoadException($"Bad face element at line {lineNo}");
                     for (int i = 0; i < vtx.Length; i++)
                     {
                         if(!ResolveVertex(ref vtx[i], positions.Count, normals.Count, texcoords.Count))
-                            throw new ModelLoadException($"Bad face element at line {ln}");
+                            throw new ModelLoadException($"Bad face element at line {lineNo}");
                     }
                     if (vtx.Length > 3) {
                         if (!warnedNonPolygonal)
@@ -94,7 +116,16 @@ namespace SimpleMesh.Formats.Obj
                             warnedNonPolygonal = true;
                             ctx.Warn("Obj", $"File contains non-triangle polys @ {lineNo}, triangulating - assumed coplanar.");
                         }
-                        vtx = Triangulate(vtx);
+                        int oidx = 0;
+                        for (int i = 1; i < vtx.Length - 1; i++)
+                        {
+                            if (oidx + 3 >= triangulatedElements.Length)
+                                throw new ModelLoadException($"Too many elements for face f on line {lineNo}");
+                            triangulatedElements[oidx++] = vtx[0];
+                            triangulatedElements[oidx++] = vtx[i];
+                            triangulatedElements[oidx++] = vtx[i + 1];
+                        }
+                        vtx = triangulatedElements.Slice(0, oidx);
                     }
                     for (int i = 0; i < vtx.Length; i++)
                     {
@@ -113,11 +144,11 @@ namespace SimpleMesh.Formats.Obj
                         currentIndices.Add((uint)currentVertex.Add(ref v));
                     }
                 }
-                else if (IsParam(ln, 'o') && GetParam(ln, out string objname))
+                else if (IsParam(ln, 'o') && GetParam(ln, out var objname))
                 {
                     if (currentIndices.Count == 0 && (currentNode == rootNode)) 
                     {
-                        rootNode.Name = objname;
+                        rootNode.Name = objname.ToString();
                     }
                     else
                     {
@@ -125,9 +156,9 @@ namespace SimpleMesh.Formats.Obj
                         {
                             var tg = new TriangleGroup()
                             {
-                                BaseVertex = 0,
+                                BaseVertex = currentVertex.BaseVertex,
                                 IndexCount = (currentIndices.Count - lastIndex),
-                                StartIndex = 0,
+                                StartIndex = lastIndex,
                                 Material = GetMaterial(currentMaterial ?? "default")
                             };
                             currentGroups.Add(tg);
@@ -140,7 +171,7 @@ namespace SimpleMesh.Formats.Obj
                         geometries.Add(currentNode.Geometry);
                         if (currentNode == rootNode)
                         {
-                            currentNode = new ModelNode() {Name = objname};
+                            currentNode = new ModelNode() {Name = objname.ToString()};
                         }
                         else
                         {
@@ -159,18 +190,19 @@ namespace SimpleMesh.Formats.Obj
                     if (lastIndex != currentIndices.Count)
                     {
                         var tg = new TriangleGroup() {
-                            BaseVertex = 0,
+                            BaseVertex = currentVertex.BaseVertex,
                             IndexCount = (currentIndices.Count - lastIndex),
                             StartIndex = lastIndex,
                             Material = GetMaterial(currentMaterial ?? "default")
                         };
                         currentGroups.Add(tg);
                         lastIndex = currentIndices.Count;
+                        currentVertex.Chunk();
                     }
                 }
                 else if (StartsWithOrdinal(ln, "usemtl") && GetParam(ln, out param))
                 {
-                    currentMaterial = param;
+                    currentMaterial = param.ToString();
                 }
                 else if (IsParam(ln, 's') ||
                          StartsWithOrdinal(ln, "mtllib") ||
@@ -205,18 +237,6 @@ namespace SimpleMesh.Formats.Obj
             model.Geometries = geometries.ToArray();
             return model;
         }
-
-        static ObjVertex[] Triangulate(ObjVertex[] input)
-        {
-            var ln = new List<ObjVertex>();
-            for (int i = 1; i < input.Length - 1; i++) {
-                ln.Add(input[0]);
-                ln.Add(input[i]);
-                ln.Add(input[i + 1]);
-            }
-            return ln.ToArray();
-        }
-
         static bool ResolveVertex(ref ObjVertex vtx, int lnV, int lnVN, int lnVT)
         {
             static bool ResolveIdx(int ln, ref int idx)
@@ -244,23 +264,32 @@ namespace SimpleMesh.Formats.Obj
             return true;
         }
 
-        static ObjVertex ParseVertex(string x, int ln)
+        static int IndexOrLength(ReadOnlySpan<char> x, char c) {
+            var index = x.IndexOf(c);
+            return index == -1 ? x.Length : index;
+        }
+        
+        static ObjVertex ParseVertex(ReadOnlySpan<char> x, int ln)
         {
-            var s = x.Split('/');
             ObjVertex vtx = new ObjVertex();
-            if(!int.TryParse(s[0].Trim(), out vtx.Position))
+            //Position
+            var index = IndexOrLength(x, '/');
+            if(!int.TryParse(x.Slice(0, index), out vtx.Position))
                 throw new ModelLoadException($"Bad face element at line {ln}");
-            if (s.Length > 1) {
-                if (!string.IsNullOrWhiteSpace(s[1]))
-                {
-                    if (!int.TryParse(s[1], out vtx.TexCoord))
-                        throw new ModelLoadException($"Bad face element at line {ln}");
-                }
-            }
-            if (s.Length > 2 && !int.TryParse(s[2], out vtx.Normal))
-            {
+            if (index == x.Length)
+                return vtx;
+            x = x.Slice(index + 1);
+            //TexCoord
+            index = IndexOrLength(x, '/');
+            var e = x.Slice(0, index);
+            if(e.Length != 0 && !e.IsWhiteSpace() && !int.TryParse(e, out vtx.TexCoord))
                 throw new ModelLoadException($"Bad face element at line {ln}");
-            }
+            if (index == x.Length)
+                return vtx;
+            x = x.Slice(index + 1);
+            //Normal
+            if (x.Length != 0 && !x.IsWhiteSpace() && !int.TryParse(x, out vtx.Normal))
+                throw new ModelLoadException($"Bad face element at line {ln}");
             return vtx;
         }
 
@@ -271,25 +300,25 @@ namespace SimpleMesh.Formats.Obj
             public int TexCoord;
         }
 
-        static bool GetParam(string s, out string param)
+        static bool GetParam(ReadOnlySpan<char> s, out ReadOnlySpan<Char> param)
         {
-            var x = s.IndexOfAny(new[] { ' ', '\t' });
+            var x = s.IndexOfAny(' ', '\t');
             if (x == -1) {
-                param = null;
+                param = default;
                 return false;
             }
-            param = s.Substring(x + 1);
+            param = s.Slice(x + 1);
             return true;
         }
 
-        static bool StartsWithOrdinal(string s, string val) => s.StartsWith(val, StringComparison.Ordinal);
+        static bool StartsWithOrdinal(ReadOnlySpan<char> s, string val) => s.StartsWith(val, StringComparison.Ordinal);
 
-        static bool IsParam(string s, char c1, char c2)
+        static bool IsParam(ReadOnlySpan<char> s, char c1, char c2)
         {
             if (s.Length < 3) return false;
             return s[0] == c1 && s[1] == c2 && char.IsWhiteSpace(s[2]);
         }
-        static bool IsParam(string s, char c)
+        static bool IsParam(ReadOnlySpan<char> s, char c)
         {
             if (s.Length < 2) return false;
             return s[0] == c && char.IsWhiteSpace(s[1]);

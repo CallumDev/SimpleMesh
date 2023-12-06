@@ -21,6 +21,8 @@ namespace SimpleMesh.Formats.SMesh
         public static void Encode32(uint[] indices, BinaryWriter writer)
         {
             writer.Write7BitEncodedInt(indices.Length);
+            if (indices.Length == 0)
+                return;
             writer.Write(indices[0]);
             var buffer = new CircularBuffer<uint>(16);
             buffer.Enqueue(indices[0]);
@@ -94,6 +96,8 @@ namespace SimpleMesh.Formats.SMesh
         public static uint[] Decode32(BinaryReader reader)
         {
             var indices = new uint[reader.Read7BitEncodedInt()];
+            if (indices.Length == 0)
+                return indices;
             indices[0] = reader.ReadUInt32();
             var buffer = new CircularBuffer<uint>(16);
             buffer.Enqueue(indices[0]);
@@ -160,6 +164,8 @@ namespace SimpleMesh.Formats.SMesh
         public static void Encode16(ushort[] indices, BinaryWriter writer)
         {
             writer.Write7BitEncodedInt(indices.Length);
+            if (indices.Length == 0)
+                return;
             writer.Write(indices[0]);
             var buffer = new CircularBuffer<ushort>(16);
             buffer.Enqueue(indices[0]);
@@ -219,6 +225,8 @@ namespace SimpleMesh.Formats.SMesh
         public static ushort[] Decode16(BinaryReader reader)
         {
             var indices = new ushort[reader.Read7BitEncodedInt()];
+            if (indices.Length == 0)
+                return indices;
             indices[0] = reader.ReadUInt16();
             var buffer = new CircularBuffer<ushort>(16);
             buffer.Enqueue(indices[0]);

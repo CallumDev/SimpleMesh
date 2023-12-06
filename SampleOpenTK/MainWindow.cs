@@ -103,7 +103,17 @@ void main()
             {
                 openfile = FilePicker.OpenFile();
                 if (openfile != null)
-                    LoadModel(openfile);
+                {
+                    try
+                    {
+                        LoadModel(openfile);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e);
+                    }
+                }
+                    
             });
             saveButton = new Button("Save To Binary", 5, 40, () =>
             {
@@ -224,7 +234,7 @@ void main()
                 {
                     if (g.Indices.Indices16 != null) {
                         for (int i = 0; i < g.Indices.Indices16.Length; i++)
-                            idx32[iCount + i] = g.Indices.Indices16[iCount];
+                            idx32[iCount + i] = g.Indices.Indices16[i];
                     }
                     else {
                         Array.Copy(g.Indices.Indices32, 0, idx32, iCount, g.Indices.Indices32.Length);
