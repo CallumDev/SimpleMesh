@@ -72,9 +72,9 @@ internal static class GLTFWriter
     {
         var attributes = new List<(string name, int index)>();
         if ((g.Attributes & VertexAttributes.Position) != 0)
-            attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Select(x => x.Position).ToArray(), true)));
+            attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Select(x => x.Position).ToArray(), true, BufferTarget.Vertex)));
         if ((g.Attributes & VertexAttributes.Normal) != 0)
-            attributes.Add(("NORMAL", ctx.AddVector3(g.Vertices.Select(x => x.Normal).ToArray(), false)));
+            attributes.Add(("NORMAL", ctx.AddVector3(g.Vertices.Select(x => x.Normal).ToArray(), false, BufferTarget.Vertex)));
         if ((g.Attributes & VertexAttributes.Texture1) != 0)
             attributes.Add(("TEXCOORD_0", ctx.AddVector2(g.Vertices.Select(x => x.Texture1).ToArray())));
         if ((g.Attributes & VertexAttributes.Texture2) != 0)
@@ -181,7 +181,7 @@ internal static class GLTFWriter
         foreach (var ch in anm.Translations)
         {
             var times = ctx.AddFloats(ch.Keyframes.Select(x => x.Time).ToArray());
-            var vecs = ctx.AddVector3(ch.Keyframes.Select(x => x.Translation).ToArray(), true);
+            var vecs = ctx.AddVector3(ch.Keyframes.Select(x => x.Translation).ToArray(), true, BufferTarget.Animation);
             var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
             if (mn.Key == null) continue;
             samplers.Add(new JsonObject
@@ -255,6 +255,13 @@ internal static class GLTFWriter
         json.WriteTo(jsonWriter);
     }
 
+    enum BufferTarget
+    {
+        Vertex,
+        Index,
+        Animation
+    }
+    
     private class GLTFContext
     {
         public readonly List<JsonObject> Accessors = new();
@@ -265,20 +272,34 @@ internal static class GLTFWriter
         public readonly Dictionary<Material, int> MaterialIndices = new();
         public readonly Dictionary<ModelNode, int> NodeIndices = new();
         public JsonObject[] Nodes;
+        
 
-        private int CreateBufferView(int start, int length, bool vertex)
+        private int CreateBufferView(int start, int length, BufferTarget target)
         {
-            BufferViews.Add(new JsonObject
+            var obj = new JsonObject
             {
-                {"buffer", 0},
-                {"byteLength", length},
-                {"byteOffset", start},
-                {"target", vertex ? 34962 : 34963}
-            });
+                { "buffer", 0 },
+                { "byteLength", length },
+                { "byteOffset", start },
+            };
+            switch (target) {
+                case BufferTarget.Vertex:
+                    obj.Add("target", 34962);
+                    break;
+                case BufferTarget.Index:
+                    obj.Add("target", 34963);
+                    break;
+                case BufferTarget.Animation:
+                    //No Target
+                    break;
+                default:
+                    throw new ArgumentException();
+            }
+            BufferViews.Add(obj);
             return BufferViews.Count - 1;
         }
 
-        public int AddVector3(Vector3[] source, bool position)
+        public int AddVector3(Vector3[] source, bool position, BufferTarget target)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
             var byteLength = source.Length * 12;
@@ -295,7 +316,7 @@ internal static class GLTFWriter
 
             var access = new JsonObject
             {
-                {"bufferView", CreateBufferView(byteStart, byteLength, true)},
+                {"bufferView", CreateBufferView(byteStart, byteLength, target)},
                 {"componentType", 5126}, //float
                 {"count", source.Length},
                 {"type", "VEC3"}
@@ -322,7 +343,7 @@ internal static class GLTFWriter
 
             Accessors.Add(new JsonObject
             {
-                {"bufferView", CreateBufferView(byteStart, byteLength, true)},
+                {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Vertex)},
                 {"componentType", 5126}, //float
                 {"count", source.Length},
                 {"type", "VEC2"}
@@ -343,7 +364,7 @@ internal static class GLTFWriter
             }
             Accessors.Add(new JsonObject
             {
-                {"bufferView", CreateBufferView(byteStart, byteLength, true)},
+                {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Animation)},
                 {"componentType", 5126}, //float
                 {"count", source.Length},
                 {"type", "VEC4"}
@@ -356,12 +377,16 @@ internal static class GLTFWriter
             var byteLength = source.Length * 4;
             foreach (var f in source)
                 BufferWriter.Write(f);
+            var min = source.Min();
+            var max = source.Max();
             Accessors.Add(new JsonObject
             {
-                {"bufferView", CreateBufferView(byteStart, byteLength, true)},
+                {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Animation)},
                 {"componentType", 5126}, //float
                 {"count", source.Length},
-                {"type", "SCALAR"}
+                {"type", "SCALAR"},
+                {"min", new JsonArray(min)},
+                {"max", new JsonArray(max)}
             });
             return Accessors.Count - 1;
         }
@@ -378,7 +403,7 @@ internal static class GLTFWriter
                 BufferWriter.Write((ushort) 0);
             Accessors.Add(new JsonObject
             {
-                {"bufferView", CreateBufferView(byteStart, byteLength, false)},
+                {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Index)},
                 {"componentType", useShort ? 5123 : 5125}, //integer
                 {"count", source.Length},
                 {"type", "SCALAR"}
