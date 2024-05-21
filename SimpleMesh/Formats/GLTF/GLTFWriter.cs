@@ -19,21 +19,24 @@ internal static class GLTFWriter
         };
     }
 
-    private static JsonNode FromMaterial(Material src)
+    private static JsonNode FromMaterial(Material src, Dictionary<string, int> textureMap)
     {
+        var pbrMetallicRoughness = new JsonObject
+        {
+            {
+                "baseColorFactor",
+                new JsonArray { src.DiffuseColor.X, src.DiffuseColor.Y, src.DiffuseColor.Z, src.DiffuseColor.W }
+            },
+            { "metallicFactor", 0f },
+            { "roughnessFactor", 0.5f }
+        };
+        if (!string.IsNullOrWhiteSpace(src.DiffuseTexture) && textureMap.TryGetValue(src.DiffuseTexture, out var index))
+            pbrMetallicRoughness.Add("baseColorTexture", new JsonObject { { "index", index } });
         return new JsonObject
         {
             {"name", src.Name},
             {
-                "pbrMetallicRoughness", new JsonObject
-                {
-                    {
-                        "baseColorFactor",
-                        new JsonArray {src.DiffuseColor.X, src.DiffuseColor.Y, src.DiffuseColor.Z, src.DiffuseColor.W}
-                    },
-                    {"metallicFactor", 0f},
-                    {"roughnessFactor", 0.5f}
-                }
+                "pbrMetallicRoughness", pbrMetallicRoughness
             }
         };
     }
@@ -97,7 +100,7 @@ internal static class GLTFWriter
                 {"indices", ctx.AddIndices(indices)},
                 {"material", ctx.MaterialIndices[tg.Material]}
             };
-            if(g.Kind == GeometryKind.Lines) 
+            if(g.Kind == GeometryKind.Lines)
                 prim.Add("mode", 1);
             groups.Add(prim);
         }
@@ -144,6 +147,33 @@ internal static class GLTFWriter
         foreach (var child in n.Children)
             CreateNode(child, ctx);
     }
+
+    static (JsonArray images, JsonArray textures, Dictionary<string, int> index) CreateImages(Dictionary<string, ImageData> images, GLTFContext ctx)
+    {
+        var imgs = new List<JsonObject>();
+        var texs = new List<JsonObject>();
+        var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        int idx = 0;
+        foreach (var kv in images)
+        {
+            var image = new JsonObject()
+            {
+                { "name", kv.Key },
+                { "mimeType", kv.Value.MimeType ?? "image/png" },
+                { "bufferView", ctx.AddImageView(kv.Value.Data) }
+            };
+            imgs.Add(image);
+            var tex = new JsonObject()
+            {
+                { "source", idx },
+            };
+            texs.Add(tex);
+            index[kv.Key] = idx;
+            idx++;
+        }
+        return (new JsonArray(imgs.ToArray()), new JsonArray(texs.ToArray()), index);
+    }
+
 
     static JsonObject CreateAnimationNode(Animation anm, GLTFContext ctx)
     {
@@ -217,15 +247,26 @@ internal static class GLTFWriter
 
         var ctx = new GLTFContext {Json = json, BufferWriter = bufferWriter};
         foreach (var r in model.Roots) WalkNode(r, ctx.NodeIndices);
+
+        ctx.Nodes = new JsonObject[ctx.NodeIndices.Count];
+        json.Add("asset", AssetNode());
+
+
+        Dictionary<string, int> textureMap = new Dictionary<string, int>();
+        if (model.Images != null && model.Images.Count > 0)
+        {
+            var (images, textures, index) = CreateImages(model.Images, ctx);
+            json.Add("images", images);
+            json.Add("textures", textures);
+            textureMap = index;
+        }
+
         var jsonMats = new List<JsonNode>();
         foreach (var m in model.Materials.Values)
         {
             ctx.MaterialIndices[m] = jsonMats.Count;
-            jsonMats.Add(FromMaterial(m));
+            jsonMats.Add(FromMaterial(m, textureMap));
         }
-
-        ctx.Nodes = new JsonObject[ctx.NodeIndices.Count];
-        json.Add("asset", AssetNode());
         json.Add("scene", 0);
         json.Add("scenes", new JsonArray(new JsonObject
         {
@@ -259,9 +300,10 @@ internal static class GLTFWriter
     {
         Vertex,
         Index,
-        Animation
+        Animation,
+        Texture
     }
-    
+
     private class GLTFContext
     {
         public readonly List<JsonObject> Accessors = new();
@@ -272,7 +314,7 @@ internal static class GLTFWriter
         public readonly Dictionary<Material, int> MaterialIndices = new();
         public readonly Dictionary<ModelNode, int> NodeIndices = new();
         public JsonObject[] Nodes;
-        
+
 
         private int CreateBufferView(int start, int length, BufferTarget target)
         {
@@ -290,6 +332,7 @@ internal static class GLTFWriter
                     obj.Add("target", 34963);
                     break;
                 case BufferTarget.Animation:
+                case BufferTarget.Texture:
                     //No Target
                     break;
                 default:
@@ -297,6 +340,17 @@ internal static class GLTFWriter
             }
             BufferViews.Add(obj);
             return BufferViews.Count - 1;
+        }
+
+        public int AddImageView(ReadOnlySpan<byte> data)
+        {
+            var byteStart = (int)BufferWriter.BaseStream.Position;
+            var byteLength = data.Length;
+            BufferWriter.Write(data);
+            //Satisfy alignment
+            while(BufferWriter.BaseStream.Position % 4 != 0)
+                BufferWriter.Write((byte)0);
+            return CreateBufferView(byteStart, byteLength, BufferTarget.Texture);
         }
 
         public int AddVector3(Vector3[] source, bool position, BufferTarget target)

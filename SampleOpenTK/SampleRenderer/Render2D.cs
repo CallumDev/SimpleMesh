@@ -59,23 +59,7 @@ void main()
         {
             //load texture
             using var stream = typeof(Render2D).Assembly.GetManifestResourceStream("SampleOpenTK.SampleRenderer.LiberationSans_0.png");
-            using (var image = Image.Load(stream))
-            {
-                texture = GL.GenTexture();
-                GL.BindTexture(TextureTarget.Texture2D, texture);
-                using var rgba32 = image.CloneAs<Rgba32>();
-                var contiguous = rgba32.TryGetSinglePixelSpan(out var pixels);
-                fixed (Rgba32* ptr = &pixels.GetPinnableReference())
-                {
-                    GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, image.Width, image.Height, 0,
-                        PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)ptr);
-                }
-                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Clamp);
-                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Clamp);
-
-            }
+            texture = Texture.Load(stream);
             shader = new Shader(VERTEX, FRAGMENT);
             GL.UseProgram(shader.ID);
             vp = shader.GetLocation("viewprojection");

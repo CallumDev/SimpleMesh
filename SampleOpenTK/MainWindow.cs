@@ -32,13 +32,19 @@ uniform mat4 normalmat;
 attribute vec3 v_position;
 attribute vec3 v_normal;
 attribute vec4 v_diffuse;
+attribute vec2 v_texture1;
 
 varying vec4 diffuse;
 varying vec3 fragpos;
 varying vec3 normal;
+varying vec2 texcoord;
+
+uniform sampler2D Texture;
+
 void main()
 {
     diffuse = v_diffuse;
+    texcoord = v_texture1;
     mat4 mvp = (viewprojection * world);
     fragpos = (mvp * vec4(v_position, 1.0)).xyz;
     normal = (normalmat * vec4(v_normal, 0.0)).xyz;
@@ -51,15 +57,18 @@ void main()
 varying vec4 diffuse;
 varying vec3 fragpos;
 varying vec3 normal;
+varying vec2 texcoord;
 
 uniform vec4 mat_diffuse;
+uniform sampler2D mat_texture;
 
 void main()
 {
     vec3 norm = normalize(normal);
-    vec3 lightDir = normalize(vec3(0,-10,-1000) - fragpos);  
+    vec3 lightDir = normalize(vec3(0.0,-10.0,-1000.0) - fragpos);  
     float diff = max(dot(norm, lightDir), 0.0);
-    gl_FragColor = diff * (mat_diffuse * diffuse);
+    vec4 sampled = texture2D(mat_texture, texcoord);
+    gl_FragColor = diff * (mat_diffuse * diffuse * sampled);
 }
 ";
 
@@ -91,7 +100,11 @@ void main()
         private Button openButton;
         private Button saveButton;
         private Button saveGltfButton;
-        protected override void OnLoad()
+
+        private Dictionary<string, int> textures = new Dictionary<string, int>();
+        private int nullTexture;
+        
+        protected override unsafe void OnLoad()
         {
             base.OnLoad();
             shader = new Shader(VERTEX_SHADER, FRAGMENT_SHADER);
@@ -99,6 +112,16 @@ void main()
             uniform_normal = shader.GetLocation("normalmat");
             uniform_world = shader.GetLocation("world");
             uniform_mat_diffuse = shader.GetLocation("mat_diffuse");
+            GL.UseProgram(shader.ID);
+            var tex = shader.GetLocation("mat_texture");
+            GL.Uniform1(tex, 0);
+            //Setup null texture
+            nullTexture = GL.GenTexture();
+            uint white = 0xFFFFFFFF;
+            GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, 1,1, 0,
+                PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)(&white));
+            
             openButton = new Button("Open...", 5, 5, () =>
             {
                 openfile = FilePicker.OpenFile();
@@ -207,6 +230,21 @@ void main()
                 GL.DeleteBuffer(ebo);
                 GL.DeleteBuffer(vbo);
             }
+            foreach(var tex in textures)
+                GL.DeleteTexture(tex.Value);
+            textures = new(StringComparer.OrdinalIgnoreCase);
+
+            if (model.Images != null)
+            {
+                foreach (var kv in model.Images)
+                {
+                    if (!textures.ContainsKey(kv.Key))
+                    {
+                        var tex = Texture.Load(new MemoryStream(kv.Value.Data.ToArray()));
+                        textures[kv.Key] = tex;
+                    }
+                }
+            }
 
             zoom = 1;
             //Calculate size of buffers
@@ -255,9 +293,11 @@ void main()
             GL.EnableVertexAttribArray(0);
             GL.EnableVertexAttribArray(1);
             GL.EnableVertexAttribArray(2);
+            GL.EnableVertexAttribArray(3);
             GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, VERTEX_SIZE, 0);
             GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, VERTEX_SIZE, 3 * sizeof(float));
             GL.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, VERTEX_SIZE, 6 * sizeof(float));
+            GL.VertexAttribPointer(3, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 10 * sizeof(float));
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, ebo);
             if (isIdx32)
                 GL.BufferData(BufferTarget.ElementArrayBuffer, sizeof(uint) * idx32.Length, idx32,
@@ -313,6 +353,13 @@ void main()
                 {
                     GL.Uniform4(uniform_mat_diffuse, tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
                         tg.Material.DiffuseColor.Z, 1);
+                    if (string.IsNullOrWhiteSpace(tg.Material.DiffuseTexture) ||
+                        !textures.TryGetValue(tg.Material.DiffuseTexture, out var tex)) {
+                        GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+                    }
+                    else {
+                        GL.BindTexture(TextureTarget.Texture2D, tex);
+                    }
                     GL.DrawElementsBaseVertex(
                         node.Geometry.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
                         tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
