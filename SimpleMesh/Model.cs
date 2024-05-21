@@ -164,7 +164,10 @@ namespace SimpleMesh
                     SMeshWriter.Write(this, stream);
                     break;
                 case ModelSaveFormat.GLTF2:
-                    GLTFWriter.Write(this, stream);
+                    GLTFWriter.Write(this, stream, false);
+                    break;
+                case ModelSaveFormat.GLB:
+                    GLTFWriter.Write(this, stream, true);
                     break;
                 case ModelSaveFormat.Collada:
                     ColladaWriter.Write(this, stream);

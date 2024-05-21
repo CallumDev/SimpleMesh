@@ -6,9 +6,9 @@ namespace SimpleMesh.Formats.GLTF
 {
     static class GLBLoader
     {
-        private const uint GLTF_MAGIC = 0x46546C67;
-        private const uint CHUNK_JSON = 0x4E4F534A;
-        private const uint CHUNK_BIN = 0x004E4942;
+        internal const uint GLTF_MAGIC = 0x46546C67;
+        internal const uint CHUNK_JSON = 0x4E4F534A;
+        internal const uint CHUNK_BIN = 0x004E4942;
         
         public static Model Load(Stream stream, ModelLoadContext ctx)
         {

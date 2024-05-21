@@ -4,6 +4,7 @@ namespace SimpleMesh
     {
         SMesh = 0,
         GLTF2 = 1,
-        Collada = 2,
+        GLB = 2,
+        Collada = 3
     }
 }

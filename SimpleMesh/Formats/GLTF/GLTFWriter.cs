@@ -28,7 +28,7 @@ internal static class GLTFWriter
                 new JsonArray { src.DiffuseColor.X, src.DiffuseColor.Y, src.DiffuseColor.Z, src.DiffuseColor.W }
             },
             { "metallicFactor", 0f },
-            { "roughnessFactor", 0.5f }
+            { "roughnessFactor", 1f }
         };
         if (!string.IsNullOrWhiteSpace(src.DiffuseTexture) && textureMap.TryGetValue(src.DiffuseTexture, out var index))
             pbrMetallicRoughness.Add("baseColorTexture", new JsonObject { { "index", index } });
@@ -239,7 +239,7 @@ internal static class GLTFWriter
         return json;
     }
 
-    public static void Write(Model model, Stream outStream)
+    public static void Write(Model model, Stream outStream, bool isGLB)
     {
         var json = new JsonObject();
         using var bufferStream = new MemoryStream();
@@ -285,15 +285,48 @@ internal static class GLTFWriter
         }
         json.Add("accessors", new JsonArray(ctx.Accessors.ToArray()));
         json.Add("bufferViews", new JsonArray(ctx.BufferViews.ToArray()));
-        var buffer = bufferStream.ToArray();
-        var bufferNode = new JsonObject
+        if (isGLB)
         {
-            {"byteLength", buffer.Length},
-            {"uri", "data:application/octet-stream;base64," + Convert.ToBase64String(buffer)}
-        };
-        json.Add("buffers", new JsonArray(bufferNode));
-        using var jsonWriter = new Utf8JsonWriter(outStream, new JsonWriterOptions {Indented = true});
-        json.WriteTo(jsonWriter);
+            //Prepare data
+            ctx.PadToFour();
+            var buffer = bufferStream.ToArray();
+            var bufferNode = new JsonObject
+            {
+                { "byteLength", buffer.Length },
+            };
+            json.Add("buffers", new JsonArray(bufferNode));
+            var jsonStream = new MemoryStream();
+            var jsonWriter = new Utf8JsonWriter(jsonStream);
+            json.WriteTo(jsonWriter);
+            jsonWriter.Flush();
+            while((jsonStream.Position % 4) != 0) //Pad with space
+                jsonStream.WriteByte(0x20);
+            
+            var jsonBuffer = jsonStream.ToArray();
+            using var glbWriter = new BinaryWriter(outStream);
+            glbWriter.Write(GLBLoader.GLTF_MAGIC);
+            glbWriter.Write(2U);
+            //header + chunk0 header + chunk1 header + chunk0 + chunk1
+            glbWriter.Write(12U + 8U + 8U + (uint)jsonBuffer.Length + (uint)buffer.LongLength);
+            glbWriter.Write((uint)jsonBuffer.Length);
+            glbWriter.Write(GLBLoader.CHUNK_JSON);
+            glbWriter.Write(jsonBuffer);
+            glbWriter.Write((uint)buffer.LongLength);
+            glbWriter.Write(GLBLoader.CHUNK_BIN);
+            glbWriter.Write(buffer);
+        }
+        else
+        {
+            var buffer = bufferStream.ToArray();
+            var bufferNode = new JsonObject
+            {
+                { "byteLength", buffer.Length },
+                { "uri", "data:application/octet-stream;base64," + Convert.ToBase64String(buffer) }
+            };
+            json.Add("buffers", new JsonArray(bufferNode));
+            using var jsonWriter = new Utf8JsonWriter(outStream, new JsonWriterOptions { Indented = true });
+            json.WriteTo(jsonWriter);
+        }
     }
 
     enum BufferTarget
@@ -348,9 +381,14 @@ internal static class GLTFWriter
             var byteLength = data.Length;
             BufferWriter.Write(data);
             //Satisfy alignment
+            PadToFour();
+            return CreateBufferView(byteStart, byteLength, BufferTarget.Texture);
+        }
+
+        public void PadToFour()
+        {
             while(BufferWriter.BaseStream.Position % 4 != 0)
                 BufferWriter.Write((byte)0);
-            return CreateBufferView(byteStart, byteLength, BufferTarget.Texture);
         }
 
         public int AddVector3(Vector3[] source, bool position, BufferTarget target)

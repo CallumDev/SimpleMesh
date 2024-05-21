@@ -144,7 +144,7 @@ void main()
                 if (savefile != null)
                     SaveModel(savefile, false);
             });
-            saveGltfButton = new Button("Save To GLTF", 5, 75, () =>
+            saveGltfButton = new Button("Save To GLB", 5, 75, () =>
             {
                 var savefile = FilePicker.SaveFile();
                 if (savefile != null)
@@ -209,7 +209,7 @@ void main()
         {
             if (model == null) return;
             using var stream = File.Create(filename);
-            model.SaveTo(stream, gltf ? ModelSaveFormat.GLTF2 : ModelSaveFormat.SMesh);
+            model.SaveTo(stream, gltf ? ModelSaveFormat.GLB : ModelSaveFormat.SMesh);
         }
 
         void LoadModel(string filename)
