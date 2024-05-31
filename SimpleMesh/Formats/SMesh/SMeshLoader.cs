@@ -29,7 +29,9 @@ namespace SimpleMesh.Formats.SMesh
                 {
                     Name = reader.ReadStringUTF8(),
                     DiffuseTexture = reader.ReadStringUTF8(),
-                    DiffuseColor = reader.ReadVector4()
+                    DiffuseColor = reader.ReadVector4(),
+                    EmissiveTexture = reader.ReadStringUTF8(),
+                    EmissiveColor = reader.ReadVector3()
                 };
                 model.Materials.Add(mat.Name, mat);
             }

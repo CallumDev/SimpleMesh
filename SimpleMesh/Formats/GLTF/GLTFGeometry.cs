@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 using System.Text.Json;
 
@@ -353,7 +354,7 @@ namespace SimpleMesh.Formats.GLTF
     {
         public byte[] Buffer;
 
-        public GLTFBuffer(JsonElement element, byte[] binchunk)
+        public GLTFBuffer(JsonElement element, byte[] binchunk, IExternalResources external)
         {
             if (!element.TryGetProperty("uri", out var uriProperty))
             {
@@ -361,25 +362,12 @@ namespace SimpleMesh.Formats.GLTF
             }
             else
             {
-                Buffer = GetBuffer(uriProperty);
-                if (Buffer == null)
-                {
-                    throw new ModelLoadException("Unsupported glTF buffer uri");
-                }
+                var str = uriProperty.GetString();
+                if (str == null)
+                    throw new ModelLoadException("Unsupported glTF uri");
+                Buffer = UriTools.BytesFromUri(str, external);
             }
         }
-
-        private const string OCTET_BASE64 = "data:application/octet-stream;base64,";
-
-        static byte[] GetBuffer(JsonElement element)
-        {
-            var str = element.GetString();
-            if (str.StartsWith(OCTET_BASE64, StringComparison.OrdinalIgnoreCase))
-            {
-                return Convert.FromBase64String(str.Substring(OCTET_BASE64.Length));
-            }
-
-            return null;
-        }
+        
     }
 }

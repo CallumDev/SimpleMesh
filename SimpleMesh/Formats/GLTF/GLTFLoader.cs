@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -49,6 +50,19 @@ namespace SimpleMesh.Formats.GLTF
             }
         }
 
+        static bool TryGetExtension(JsonElement element, string extensionName, out JsonElement ext)
+        {
+            ext = new JsonElement();
+            if (!element.TryGetProperty("extensions", out var extensions)) {
+                return false;
+            }
+            if (!extensions.TryGetProperty(extensionName, out ext)) {
+                return false;
+            }
+            return true;
+        }
+
+        
         public static Model Load(string json, byte[] binchunk, ModelLoadContext ctx)
         {
             using var jsonObject = JsonDocument.Parse(json);
@@ -77,7 +91,7 @@ namespace SimpleMesh.Formats.GLTF
             int k = 0;
             foreach (var b in buffersElement.EnumerateArray())
             {
-                buffers[k] = new GLTFBuffer(b, binchunk);
+                buffers[k] = new GLTFBuffer(b, binchunk, ctx.ExternalResources);
                 k++;
             }
             var bufferViews = new GLTFBufferView[bufferViewsElement.GetArrayLength()];
@@ -97,6 +111,7 @@ namespace SimpleMesh.Formats.GLTF
             //Load materials
             ImageData[] images = null;
             Dictionary<string, ImageData> referencedImages = null;
+            int filenameCount = 0;
             if (jsonRoot.TryGetProperty("images", out var imagesElement))
             {
                 k = 0;
@@ -118,6 +133,17 @@ namespace SimpleMesh.Formats.GLTF
                         data = new byte[bv.ByteLength];
                         Array.Copy(bv.Buffer.Buffer, bv.ByteOffset, data, 0, bv.ByteLength);
                     }
+                    else if (i.TryGetProperty("uri", out var uriElem))
+                    {
+                        var str = uriElem.GetString();
+                        if (str == null)
+                            throw new ModelLoadException("Unsupported glTF uri");
+                        data = UriTools.BytesFromUri(str, ctx.ExternalResources);
+                        name ??= UriTools.NameFromUri(str, ref filenameCount);
+                        mimeType ??= UriTools.MimeTypeFromUri(str);
+                    }
+                    if (name == null)
+                        name = $"texture{filenameCount++}";
                     images[k] = new ImageData(name, data, mimeType);
                     k++;
                 }
@@ -136,6 +162,26 @@ namespace SimpleMesh.Formats.GLTF
                 }
             }
 
+            string GetTexture(JsonElement element, string propertyName)
+            {
+                if (element.TryGetProperty(propertyName, out var prop)
+                    && textureSources != null
+                    && images != null && prop.TryGetProperty("index", out var tex))
+                {
+                    var idx1 = tex.GetInt32();
+                    if (idx1 < 0 || idx1 >= textureSources.Length)
+                        return null;
+                    var idx2 = textureSources[idx1];
+                    if (idx2 < 0 || idx2 >= images.Length)
+                        return null;
+                    var img = images[textureSources[tex.GetInt32()]];
+                    if (img.Data != null)
+                        referencedImages[img.Name] = img;
+                    return img.Name;
+                }
+                return null;
+            }
+            
             Material[] materials;
             if (jsonRoot.TryGetProperty("materials", out var materialsElement))
             {
@@ -146,7 +192,28 @@ namespace SimpleMesh.Formats.GLTF
                     if (!m.TryGetProperty("name", out var matname))
                         throw new ModelLoadException("material missing name property");
                     var mat = new Material {Name = matname.GetString()};
-                    if (m.TryGetProperty("pbrMetallicRoughness", out var pbr))
+                    mat.DiffuseColor = Vector4.One; // Default colour
+                    if (m.TryGetProperty("emissiveFactor", out var emissiveCol))
+                    {
+                        if (TryGetVector3(emissiveCol, out var col))
+                            mat.EmissiveColor = col;
+                    }
+                    mat.EmissiveTexture = GetTexture(m, "emissiveTexture");
+                    // KHR_materials_pbrSpecularGlossiness is deprecated, but some models out there still use it
+                    // though you won't find many viewers that support this one!
+                    // We are only extracting diffuse information out of this, so it should be fine.
+                    if (TryGetExtension(m, "KHR_materials_pbrSpecularGlossiness", out var specGloss))
+                    {
+                        if(specGloss.TryGetProperty("diffuseFactor", out var baseCol))
+                        {
+                            if (GetFloatArray(baseCol, 4, out var colFactor))
+                                mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
+                            else if (TryGetVector3(baseCol, out var colRgb))
+                                mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                        }
+                        mat.DiffuseTexture = GetTexture(specGloss, "diffuseTexture");
+                    }
+                    else if (m.TryGetProperty("pbrMetallicRoughness", out var pbr))
                     {
                         if (pbr.TryGetProperty("baseColorFactor", out var baseCol))
                         {
@@ -155,22 +222,7 @@ namespace SimpleMesh.Formats.GLTF
                             else if (TryGetVector3(baseCol, out var colRgb))
                                 mat.DiffuseColor = new Vector4(colRgb, 1.0f);
                         }
-                        else
-                        {
-                            mat.DiffuseColor = Vector4.One;
-                        }
-
-                        if (pbr.TryGetProperty("baseColorTexture", out var texElem)
-                            && textureSources != null
-                            && images != null && texElem.TryGetProperty("index", out var tex))
-                        {
-                            var img = images[textureSources[tex.GetInt32()]];
-                            mat.DiffuseTexture = img.Name;
-                            if (img.Data != null)
-                            {
-                                referencedImages[img.Name] = img;
-                            }
-                        }
+                        mat.DiffuseTexture = GetTexture(pbr, "baseColorTexture");
                     }
 
                     materials[k++] = mat;

@@ -18,9 +18,14 @@ namespace SimpleMesh
         public Dictionary<string, ImageData> Images;
         public Animation[] Animations;
 
-        public static Model FromStream(Stream stream)
+        public static Model FromStream(Stream stream, IExternalResources resources = null)
         {
-            return Autodetect.Load(stream, new ModelLoadContext());
+            return Autodetect.Load(stream, new ModelLoadContext() { ExternalResources = resources ?? new DisallowedResources() });
+        }
+        public static Model FromFile(string filename)
+        {
+            using var stream = File.OpenRead(filename);
+            return FromStream(stream, new FileResources(filename));
         }
 
         public Model AutoselectRoot(out bool success)

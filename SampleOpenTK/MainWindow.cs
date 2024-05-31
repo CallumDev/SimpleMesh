@@ -60,15 +60,21 @@ varying vec3 normal;
 varying vec2 texcoord;
 
 uniform vec4 mat_diffuse;
+uniform vec3 mat_emissive;
 uniform sampler2D mat_texture;
+uniform sampler2D mat_emissiveTexture;
+uniform vec3 light_pos;
 
 void main()
 {
     vec3 norm = normalize(normal);
-    vec3 lightDir = normalize(vec3(0.0,-10.0,-1000.0) - fragpos);  
+    vec3 lightDir = normalize(light_pos - fragpos);  
     float diff = max(dot(norm, lightDir), 0.0);
     vec4 sampled = texture2D(mat_texture, texcoord);
-    gl_FragColor = diff * (mat_diffuse * diffuse * sampled);
+    vec4 sampledEmissive = texture2D(mat_emissiveTexture, texcoord);
+    vec4 emissive = vec4(mat_emissive * sampledEmissive.rgb, 1.0);
+    vec4 col = emissive + diff * (mat_diffuse * diffuse * sampled);
+    gl_FragColor = vec4(col.rgb, sampled.a);
 }
 ";
 
@@ -95,6 +101,8 @@ void main()
         private int uniform_normal;
         private int uniform_vp;
         private int uniform_mat_diffuse;
+        private int uniform_mat_emissive;
+        private int uniform_light_pos;
         private AnimationHandler animations;
 
         private Button openButton;
@@ -112,9 +120,13 @@ void main()
             uniform_normal = shader.GetLocation("normalmat");
             uniform_world = shader.GetLocation("world");
             uniform_mat_diffuse = shader.GetLocation("mat_diffuse");
+            uniform_mat_emissive = shader.GetLocation("mat_emissive");
+            uniform_light_pos = shader.GetLocation("light_pos");
             GL.UseProgram(shader.ID);
             var tex = shader.GetLocation("mat_texture");
+            var tex2 = shader.GetLocation("mat_emissiveTexture");
             GL.Uniform1(tex, 0);
+            GL.Uniform1(tex2, 1);
             //Setup null texture
             nullTexture = GL.GenTexture();
             uint white = 0xFFFFFFFF;
@@ -216,8 +228,7 @@ void main()
         {
             animations = new AnimationHandler();
             var sw = Stopwatch.StartNew();
-            using var stream = File.OpenRead(filename);
-            model = Model.FromStream(stream)
+            model = Model.FromFile(filename)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
@@ -317,6 +328,14 @@ void main()
                     y += 35;
                 }
             }
+
+            modelRadius = 0;
+            for (int i = 0; i < model.Roots.Length; i++) {
+                GetRadius(model.Roots[i], Matrix4x4.Identity, ref modelRadius);
+            }
+
+            if (modelRadius <= 0)
+                modelRadius = 1;
         }
 
         class BufferOffset
@@ -353,12 +372,22 @@ void main()
                 {
                     GL.Uniform4(uniform_mat_diffuse, tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
                         tg.Material.DiffuseColor.Z, 1);
+                    GL.Uniform3(uniform_mat_emissive, tg.Material.EmissiveColor.X, tg.Material.EmissiveColor.Y, tg.Material.EmissiveColor.Z);
+                    GL.ActiveTexture(TextureUnit.Texture0);
                     if (string.IsNullOrWhiteSpace(tg.Material.DiffuseTexture) ||
                         !textures.TryGetValue(tg.Material.DiffuseTexture, out var tex)) {
                         GL.BindTexture(TextureTarget.Texture2D, nullTexture);
                     }
                     else {
                         GL.BindTexture(TextureTarget.Texture2D, tex);
+                    }
+                    GL.ActiveTexture(TextureUnit.Texture1);
+                    if (string.IsNullOrWhiteSpace(tg.Material.EmissiveTexture) ||
+                        !textures.TryGetValue(tg.Material.EmissiveTexture, out var emissivetex)) {
+                        GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+                    }
+                    else {
+                        GL.BindTexture(TextureTarget.Texture2D, emissivetex);
                     }
                     GL.DrawElementsBaseVertex(
                         node.Geometry.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
@@ -375,8 +404,25 @@ void main()
         }
 
         private float zoom = 1;
+        private float modelRadius = 1;
 
         private string openfile = null;
+
+        //Find first model node we can find. Used for zoom when empty parent object used
+        void GetRadius(ModelNode m, Matrix4x4 matrix, ref float radius)
+        {
+            var tr = m.Transform * matrix;
+            if (m.Geometry != null)
+            {
+                var d = System.Numerics.Vector3.Transform(System.Numerics.Vector3.Zero, tr).Length();
+                if (d + m.Geometry.Radius > radius)
+                    radius = (d + m.Geometry.Radius);
+            }
+            foreach (var child in m.Children)
+            {
+                GetRadius(child, tr, ref radius);
+            }
+        }
         protected override void OnRenderFrame(FrameEventArgs args)
         {
             animations?.Update((float)args.Time);
@@ -411,21 +457,25 @@ void main()
                 GL.UseProgram(shader.ID);
                 GL.BindVertexArray(vao);
                 //generate camera matrix based off model dimensions
-                float dist = 0;
-                for (int i = 0; i < model.Roots.Length; i++) {
-                    if (model.Roots[i].Geometry != null)
-                        dist = Math.Max(model.Roots[i].Geometry.Radius, dist);
-                }
+                
                 var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60), (float) Size.X / Size.Y,
                     0.02f, 10000);
-                var view = Matrix4.LookAt(new Vector3(0, 0, (-dist * 4) * zoom), Vector3.Zero, Vector3.UnitY);
+                var view = Matrix4.LookAt(new Vector3(0, 0, (-modelRadius * 4) * zoom), Vector3.Zero, Vector3.UnitY);
                 var vp = view * projection;
                 GL.UniformMatrix4(uniform_vp, false, ref vp);
+
+                var mscale = modelRadius / 500.0f;
+                if (mscale < 1)
+                    mscale = 1;
+                var lp = new Vector3(0.0f, -10.0f, -1000.0f * mscale);
+                GL.Uniform3(uniform_light_pos, lp);
                 //draw starting at first root node.
                 for (int i = 0; i < model.Roots.Length; i++)
                 {
                     DrawNode(model.Roots[i], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX));
                 }
+                //reset texture state
+                GL.ActiveTexture(TextureUnit.Texture0);
             }
             text.Start(sz.X, sz.Y);
             foreach (var b in buttons)
@@ -445,7 +495,8 @@ void main()
         static void Main(string[] args)
         {
             var settings = NativeWindowSettings.Default;
-            settings.Size = new Vector2i(1024, 768);
+            settings.ClientSize = new Vector2i(1024, 768);
+            settings.Vsync = VSyncMode.On;
             new MainWindow(GameWindowSettings.Default, settings).Run();
         }
     }

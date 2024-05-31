@@ -32,13 +32,18 @@ internal static class GLTFWriter
         };
         if (!string.IsNullOrWhiteSpace(src.DiffuseTexture) && textureMap.TryGetValue(src.DiffuseTexture, out var index))
             pbrMetallicRoughness.Add("baseColorTexture", new JsonObject { { "index", index } });
-        return new JsonObject
+        var mat = new JsonObject
         {
             {"name", src.Name},
             {
                 "pbrMetallicRoughness", pbrMetallicRoughness
             }
         };
+        if(src.EmissiveColor != Vector3.Zero)
+            mat.Add("emissiveFactor", new JsonArray() { src.EmissiveColor.X, src.EmissiveColor.Y, src.EmissiveColor.Z });
+        if (!string.IsNullOrWhiteSpace(src.EmissiveTexture) && textureMap.TryGetValue(src.EmissiveTexture, out index))
+            mat.Add("emissiveTexture", new JsonObject { { "index", index } });
+        return mat;
     }
 
     private static JsonNode FromProperty(PropertyValue pv)

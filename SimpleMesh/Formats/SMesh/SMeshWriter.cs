@@ -22,6 +22,8 @@ namespace SimpleMesh.Formats.SMesh
                 writer.WriteStringUTF8(m.Name);
                 writer.WriteStringUTF8(m.DiffuseTexture);
                 writer.Write(m.DiffuseColor);
+                writer.WriteStringUTF8(m.EmissiveTexture);
+                writer.Write(m.EmissiveColor);
             }
             writer.Write7BitEncodedInt(model.Geometries.Length);
             foreach (var g in model.Geometries)
