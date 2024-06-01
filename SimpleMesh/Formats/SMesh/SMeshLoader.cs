@@ -28,10 +28,15 @@ namespace SimpleMesh.Formats.SMesh
                 var mat = new Material()
                 {
                     Name = reader.ReadStringUTF8(),
-                    DiffuseTexture = reader.ReadStringUTF8(),
+                    DiffuseTexture = ReadTexInfo(reader),
                     DiffuseColor = reader.ReadVector4(),
-                    EmissiveTexture = reader.ReadStringUTF8(),
-                    EmissiveColor = reader.ReadVector3()
+                    EmissiveTexture = ReadTexInfo(reader),
+                    EmissiveColor = reader.ReadVector3(),
+                    NormalTexture = ReadTexInfo(reader),
+                    MetallicRoughness = reader.ReadByte() != 0,
+                    MetallicFactor = reader.ReadSingle(),
+                    RoughnessFactor = reader.ReadSingle(),
+                    MetallicRoughnessTexture = ReadTexInfo(reader),
                 };
                 model.Materials.Add(mat.Name, mat);
             }
@@ -100,6 +105,13 @@ namespace SimpleMesh.Formats.SMesh
                 }
             }
             return model;
+        }
+
+        static TextureInfo ReadTexInfo(BinaryReader reader)
+        {
+            var name = reader.ReadStringUTF8();
+            if (name == null) return null;
+            return new TextureInfo(name, reader.ReadByte());
         }
 
         static PropertyValue ReadProperty(BinaryReader reader)
@@ -187,10 +199,16 @@ namespace SimpleMesh.Formats.SMesh
                     g.Vertices[i].Diffuse = reader.ReadVector4();
                 else
                     g.Vertices[i].Diffuse = Vector4.One;
+                if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+                    g.Vertices[i].Tangent = reader.ReadVector4();
                 if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
                     g.Vertices[i].Texture1 = reader.ReadVector2();
                 if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
                     g.Vertices[i].Texture2 = reader.ReadVector2();
+                if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+                    g.Vertices[i].Texture3 = reader.ReadVector2();
+                if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+                    g.Vertices[i].Texture4 = reader.ReadVector2();
             }
 
             var indexType = reader.ReadByte();

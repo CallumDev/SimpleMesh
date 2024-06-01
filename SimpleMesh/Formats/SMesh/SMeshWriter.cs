@@ -20,10 +20,15 @@ namespace SimpleMesh.Formats.SMesh
             foreach (var m in model.Materials.Values)
             {
                 writer.WriteStringUTF8(m.Name);
-                writer.WriteStringUTF8(m.DiffuseTexture);
+                WriteTexInfo(writer, m.DiffuseTexture);
                 writer.Write(m.DiffuseColor);
-                writer.WriteStringUTF8(m.EmissiveTexture);
+                WriteTexInfo(writer, m.EmissiveTexture);
                 writer.Write(m.EmissiveColor);
+                WriteTexInfo(writer, m.NormalTexture);
+                writer.Write(m.MetallicRoughness ? (byte)1 : (byte)0);
+                writer.Write(m.MetallicFactor);
+                writer.Write(m.RoughnessFactor);
+                WriteTexInfo(writer, m.MetallicRoughnessTexture);
             }
             writer.Write7BitEncodedInt(model.Geometries.Length);
             foreach (var g in model.Geometries)
@@ -83,6 +88,19 @@ namespace SimpleMesh.Formats.SMesh
             else
             {
                 writer.Write7BitEncodedInt(0);
+            }
+        }
+
+        static void WriteTexInfo(BinaryWriter writer, TextureInfo tex)
+        {
+            if (tex?.Name == null)
+            {
+                writer.WriteStringUTF8(null);
+            }
+            else
+            {
+                writer.WriteStringUTF8(tex.Name);
+                writer.Write((byte)tex.CoordinateIndex);
             }
         }
 
@@ -190,10 +208,16 @@ namespace SimpleMesh.Formats.SMesh
                     writer.Write(v.Normal);
                 if((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
                     writer.Write(v.Diffuse);
+                if((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+                    writer.Write(v.Tangent);
                 if((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
                     writer.Write(v.Texture1);
                 if((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
                     writer.Write(v.Texture2);
+                if((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+                    writer.Write(v.Texture3);
+                if((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+                    writer.Write(v.Texture4);
             }
             if (g.Indices.Indices16 != null) {
                 writer.Write((byte)0);

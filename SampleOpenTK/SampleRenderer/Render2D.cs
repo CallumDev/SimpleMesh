@@ -35,7 +35,6 @@ void main()
 
 ";
         private Shader shader;
-        private int vp;
         private int vao;
         private int vbo;
 
@@ -61,9 +60,7 @@ void main()
             using var stream = typeof(Render2D).Assembly.GetManifestResourceStream("SampleOpenTK.SampleRenderer.LiberationSans_0.png");
             texture = Texture.Load(stream);
             shader = new Shader(VERTEX, FRAGMENT);
-            GL.UseProgram(shader.ID);
-            vp = shader.GetLocation("viewprojection");
-            GL.Uniform1(shader.GetLocation("texture"), 0);
+            shader.SetI("texture", 0);
             vao = GL.GenVertexArray();
             vbo = GL.GenBuffer();
             GL.BindVertexArray(vao);
@@ -71,8 +68,8 @@ void main()
             GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(4 * sizeof(float) * 16384), IntPtr.Zero, BufferUsageHint.StreamDraw);
             GL.EnableVertexAttribArray(0);
             GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 0);
-            GL.EnableVertexAttribArray(3);
-            GL.VertexAttribPointer(3, 2,  VertexAttribPointerType.Float, false, 4 * sizeof(float), 2 * sizeof(float));
+            GL.EnableVertexAttribArray(4);
+            GL.VertexAttribPointer(4, 2,  VertexAttribPointerType.Float, false, 4 * sizeof(float), 2 * sizeof(float));
         }
         
         public void Start(int width, int height)
@@ -81,9 +78,9 @@ void main()
             GL.Disable(EnableCap.DepthTest);
             GL.Enable(EnableCap.Blend);
             GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-            GL.UseProgram(shader.ID);
+            shader.Use();
             var m = Matrix4.CreateOrthographicOffCenter(0, width, height, 0, 0, 1);
-            GL.UniformMatrix4(vp, false, ref m);
+            shader.Set("viewprojection", m);
         }
 
         public Vector2i MeasureString(string text)

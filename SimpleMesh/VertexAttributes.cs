@@ -5,10 +5,13 @@ namespace SimpleMesh
     [Flags]
     public enum VertexAttributes : ushort
     {
-        Position = 0x1,
-        Normal = 0x2,
-        Texture1 = 0x4,
-        Texture2 = 0x8,
-        Diffuse = 0x10
+        Position = (1 << 0),
+        Normal = (1 << 1),
+        Diffuse = (1 << 2),
+        Tangent = (1 << 3),
+        Texture1 = (1 << 4),
+        Texture2 = (1 << 5),
+        Texture3 = (1 << 6),
+        Texture4 = (1 << 7)
     }
 }

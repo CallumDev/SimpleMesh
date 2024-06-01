@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
 namespace SimpleMesh
 {
-    public class Geometry
+    public class Geometry : ITangentGeometry
     {
         public string Name;
         public GeometryKind Kind;
@@ -43,6 +42,7 @@ namespace SimpleMesh
                 avgY += v.Position.Y;
                 avgZ += v.Position.Z;
             }
+
             Min = new Vector3(minX, minY, minZ);
             Max = new Vector3(maxX, maxY, maxZ);
             Center = new Vector3(avgX, avgY, avgZ) / Vertices.Length;
@@ -53,18 +53,50 @@ namespace SimpleMesh
         }
 
         internal Geometry Clone(Model model) => new Geometry()
-            {
-                Name = Name,
-                Kind = Kind,
-                Attributes = Attributes,
-                Vertices = Vertices.ToArray(),
-                Indices = Indices.Clone(),
-                Groups = Groups.Select(x => x.Clone(model)).ToArray(),
-                Center = Center,
-                Min = Min,
-                Max = Max,
-                Radius = Radius,
-                UserTag = UserTag
-            };
+        {
+            Name = Name,
+            Kind = Kind,
+            Attributes = Attributes,
+            Vertices = Vertices.ToArray(),
+            Indices = Indices.Clone(),
+            Groups = Groups.Select(x => x.Clone(model)).ToArray(),
+            Center = Center,
+            Min = Min,
+            Max = Max,
+            Radius = Radius,
+            UserTag = UserTag
+        };
+
+
+        int GetIndex(int iFace, int iVert)
+        {
+            var idxBuffer = (iFace * 3) + iVert;
+            if (Indices == null)
+                return idxBuffer;
+            return (int)(Indices.Indices16 != null
+                ? Indices.Indices16[idxBuffer]
+                : Indices.Indices32[idxBuffer]);
+        }
+
+
+        int ITangentGeometry.GetNumFaces()
+        {
+            if (Indices == null) return Vertices.Length / 3;
+            return Indices.Length / 3;
+        }
+
+        int ITangentGeometry.GetNumVerticesOfFace(int index) => 3;
+
+        Vector3 ITangentGeometry.GetPosition(int faceIndex, int faceVertex) =>
+            Vertices[GetIndex(faceIndex, faceVertex)].Position;
+
+        Vector3 ITangentGeometry.GetNormal(int faceIndex, int faceVertex) =>
+            Vertices[GetIndex(faceIndex, faceVertex)].Normal;
+
+        Vector2 ITangentGeometry.GetTexCoord(int faceIndex, int faceVertex) =>
+            Vertices[GetIndex(faceIndex, faceVertex)].Texture1;
+
+        void ITangentGeometry.SetTangent(Vector4 tangent, int faceIndex, int faceVertex) =>
+            Vertices[GetIndex(faceIndex, faceVertex)].Tangent = tangent;
     }
 }

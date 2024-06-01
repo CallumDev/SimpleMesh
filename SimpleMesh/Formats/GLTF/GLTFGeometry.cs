@@ -35,7 +35,7 @@ namespace SimpleMesh.Formats.GLTF
                 }
                 startMode = mode;
 
-                int posIndex = -1, normIndex = -1, tex1Index = -1, colIndex = -1, tex2Index = -1;
+                int posIndex = -1, normIndex = -1, tex1Index = -1, colIndex = -1, tex2Index = -1, tangentIndex = -1, tex3Index = -1, tex4Index = -1;
                 foreach (var elem in attrArray.EnumerateObject())
                 {
                     switch (elem.Name)
@@ -55,9 +55,21 @@ namespace SimpleMesh.Formats.GLTF
                             tex2Index = elem.Value.GetInt32();
                             g.Attributes |= VertexAttributes.Texture2;
                             break;
+                        case "TEXCOORD_2":
+                            tex3Index = elem.Value.GetInt32();
+                            g.Attributes |= VertexAttributes.Texture3;
+                            break;
+                        case "TEXCOORD_3":
+                            tex4Index = elem.Value.GetInt32();
+                            g.Attributes |= VertexAttributes.Texture4;
+                            break;
                         case "COLOR":
                             colIndex = elem.Value.GetInt32();
                             g.Attributes |= VertexAttributes.Diffuse;
+                            break;
+                        case "TANGENT":
+                            tangentIndex = elem.Value.GetInt32();
+                            g.Attributes |= VertexAttributes.Tangent;
                             break;
                     }
                 }
@@ -72,6 +84,8 @@ namespace SimpleMesh.Formats.GLTF
                         v.Position = accessors[posIndex].GetVector3((int) index);
                         if (normIndex != -1)
                             v.Normal = accessors[normIndex].GetVector3((int) index);
+                        if (tangentIndex != -1)
+                            v.Tangent = accessors[tangentIndex].GetVector4((int)index);
                         if (tex1Index != -1)
                         {
                             v.Texture1 = accessors[tex1Index].GetVector2((int) index);
@@ -79,6 +93,14 @@ namespace SimpleMesh.Formats.GLTF
                         if (tex2Index != -1)
                         {
                             v.Texture2 = accessors[tex2Index].GetVector2((int) index);
+                        }
+                        if (tex3Index != -1)
+                        {
+                            v.Texture3 = accessors[tex3Index].GetVector2((int)index);
+                        }
+                        if (tex4Index != -1)
+                        {
+                            v.Texture4 = accessors[tex4Index].GetVector2((int)index);
                         }
                         if (colIndex != -1)
                         {
@@ -97,23 +119,33 @@ namespace SimpleMesh.Formats.GLTF
                     for (int index = 0; index < c; index++)
                     {
                         var v = new Vertex() {Diffuse = Vector4.One};
-                        v.Position = accessors[posIndex].GetVector3((int) index);
+                        v.Position = accessors[posIndex].GetVector3(index);
                         if (normIndex != -1)
-                            v.Normal = accessors[normIndex].GetVector3((int) index);
+                            v.Normal = accessors[normIndex].GetVector3(index);
+                        if (tangentIndex != -1)
+                            v.Tangent = accessors[tangentIndex].GetVector4(index);
                         if (tex1Index != -1)
                         {
-                            v.Texture1 = accessors[tex1Index].GetVector2((int) index);
+                            v.Texture1 = accessors[tex1Index].GetVector2(index);
                         }
                         if (tex2Index != -1)
                         {
-                            v.Texture2 = accessors[tex2Index].GetVector2((int) index);
+                            v.Texture2 = accessors[tex2Index].GetVector2(index);
+                        }
+                        if (tex3Index != -1)
+                        {
+                            v.Texture3 = accessors[tex3Index].GetVector2(index);
+                        }
+                        if (tex4Index != -1)
+                        {
+                            v.Texture4 = accessors[tex4Index].GetVector2(index);
                         }
                         if (colIndex != -1)
                         {
                             if (accessors[colIndex].Type == AccessorType.VEC3)
-                                v.Diffuse = new Vector4(accessors[colIndex].GetVector3((int) index), 1.0f);
+                                v.Diffuse = new Vector4(accessors[colIndex].GetVector3(index), 1.0f);
                             else
-                                v.Diffuse = accessors[colIndex].GetVector4((int) index);
+                                v.Diffuse = accessors[colIndex].GetVector4(index);
                         }
                         int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);

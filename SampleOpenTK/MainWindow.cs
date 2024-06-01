@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using OpenTK.Windowing.Common;
@@ -16,67 +17,12 @@ using Vector3 = OpenTK.Mathematics.Vector3;
 
 namespace SampleOpenTK
 {
-    class MainWindow : GameWindow
+    partial class MainWindow : GameWindow
     {
         private Render2D text;
         public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
         }
-
-        private const string VERTEX_SHADER = @"
-#version 120
-uniform mat4 world;
-uniform mat4 viewprojection;
-uniform mat4 normalmat;
-
-attribute vec3 v_position;
-attribute vec3 v_normal;
-attribute vec4 v_diffuse;
-attribute vec2 v_texture1;
-
-varying vec4 diffuse;
-varying vec3 fragpos;
-varying vec3 normal;
-varying vec2 texcoord;
-
-uniform sampler2D Texture;
-
-void main()
-{
-    diffuse = v_diffuse;
-    texcoord = v_texture1;
-    mat4 mvp = (viewprojection * world);
-    fragpos = (mvp * vec4(v_position, 1.0)).xyz;
-    normal = (normalmat * vec4(v_normal, 0.0)).xyz;
-    gl_Position = mvp * vec4(v_position, 1.0);
-}
-";
-
-        private const string FRAGMENT_SHADER = @"
-#version 120
-varying vec4 diffuse;
-varying vec3 fragpos;
-varying vec3 normal;
-varying vec2 texcoord;
-
-uniform vec4 mat_diffuse;
-uniform vec3 mat_emissive;
-uniform sampler2D mat_texture;
-uniform sampler2D mat_emissiveTexture;
-uniform vec3 light_pos;
-
-void main()
-{
-    vec3 norm = normalize(normal);
-    vec3 lightDir = normalize(light_pos - fragpos);  
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec4 sampled = texture2D(mat_texture, texcoord);
-    vec4 sampledEmissive = texture2D(mat_emissiveTexture, texcoord);
-    vec4 emissive = vec4(mat_emissive * sampledEmissive.rgb, 1.0);
-    vec4 col = emissive + diff * (mat_diffuse * diffuse * sampled);
-    gl_FragColor = vec4(col.rgb, sampled.a);
-}
-";
 
         //Handle Input
         class Button
@@ -96,37 +42,30 @@ void main()
         }
         private List<Button> buttons = new List<Button>();
         
-        private Shader shader;
-        private int uniform_world;
-        private int uniform_normal;
-        private int uniform_vp;
-        private int uniform_mat_diffuse;
-        private int uniform_mat_emissive;
-        private int uniform_light_pos;
+        private Shader diffuseShader;
+        private Shader pbrShader;
         private AnimationHandler animations;
 
         private Button openButton;
         private Button saveButton;
         private Button saveGltfButton;
-
+        private Button pbrButton;
+        
         private Dictionary<string, int> textures = new Dictionary<string, int>();
         private int nullTexture;
         
         protected override unsafe void OnLoad()
         {
             base.OnLoad();
-            shader = new Shader(VERTEX_SHADER, FRAGMENT_SHADER);
-            uniform_vp = shader.GetLocation("viewprojection");
-            uniform_normal = shader.GetLocation("normalmat");
-            uniform_world = shader.GetLocation("world");
-            uniform_mat_diffuse = shader.GetLocation("mat_diffuse");
-            uniform_mat_emissive = shader.GetLocation("mat_emissive");
-            uniform_light_pos = shader.GetLocation("light_pos");
-            GL.UseProgram(shader.ID);
-            var tex = shader.GetLocation("mat_texture");
-            var tex2 = shader.GetLocation("mat_emissiveTexture");
-            GL.Uniform1(tex, 0);
-            GL.Uniform1(tex2, 1);
+            diffuseShader = new Shader(VERTEX_SHADER, DIFFUSE_FRAGMENT_SHADER);
+            diffuseShader.SetI("mat_texture", 0);
+            diffuseShader.SetI("mat_emissiveTexture", 1);
+            diffuseShader.SetI("mat_normalTexture", 2);
+            pbrShader = new Shader(VERTEX_SHADER, PBR_FRAGMENT_SHADER);
+            pbrShader.SetI("mat_texture", 0);
+            pbrShader.SetI("mat_emissiveTexture", 1);
+            pbrShader.SetI("mat_normalTexture", 2);
+            pbrShader.SetI("mat_metallicRoughnessTexture", 3);
             //Setup null texture
             nullTexture = GL.GenTexture();
             uint white = 0xFFFFFFFF;
@@ -162,6 +101,13 @@ void main()
                 if (savefile != null)
                     SaveModel(savefile, true);
             });
+
+            pbrButton = new Button("PBR Enabled", 5, 110, () =>
+            {
+                pbrEnabled = !pbrEnabled;
+                pbrButton.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
+            });
+            
             buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
             text = new Render2D();
         }
@@ -230,6 +176,7 @@ void main()
             var sw = Stopwatch.StartNew();
             model = Model.FromFile(filename)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
+                .CalculateTangents(false, true) //Calculate missing tangents
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
             openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";
@@ -294,6 +241,7 @@ void main()
             }
 
             //Upload data to OpenGL
+            //In a real application, you would pack these vertex buffers tightly after reading
             vao = GL.GenVertexArray();
             ebo = GL.GenBuffer();
             vbo = GL.GenBuffer();
@@ -305,10 +253,18 @@ void main()
             GL.EnableVertexAttribArray(1);
             GL.EnableVertexAttribArray(2);
             GL.EnableVertexAttribArray(3);
+            GL.EnableVertexAttribArray(4);
+            GL.EnableVertexAttribArray(5);
+            GL.EnableVertexAttribArray(6);
+            GL.EnableVertexAttribArray(7);
             GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, VERTEX_SIZE, 0);
             GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, VERTEX_SIZE, 3 * sizeof(float));
             GL.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, VERTEX_SIZE, 6 * sizeof(float));
-            GL.VertexAttribPointer(3, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 10 * sizeof(float));
+            GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, VERTEX_SIZE, 10 * sizeof(float));
+            GL.VertexAttribPointer(4, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 14 * sizeof(float));
+            GL.VertexAttribPointer(5, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 16 * sizeof(float));
+            GL.VertexAttribPointer(6, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 18 * sizeof(float));
+            GL.VertexAttribPointer(7, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 20 * sizeof(float));
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, ebo);
             if (isIdx32)
                 GL.BufferData(BufferTarget.ElementArrayBuffer, sizeof(uint) * idx32.Length, idx32,
@@ -316,8 +272,15 @@ void main()
             else
                 GL.BufferData(BufferTarget.ElementArrayBuffer, sizeof(ushort) * idx16.Length, idx16, BufferUsageHint.StaticDraw);
             GL.BindVertexArray(0);
-            
-            buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
+
+            hasPbr = pbrEnabled = model.Materials.Any(x => x.Value.MetallicRoughness);
+            if (hasPbr)
+            {
+                pbrButton.Text = "PBR Enabled";
+                buttons = new List<Button>(new[] { openButton, saveButton, saveGltfButton, pbrButton });
+            }
+            else
+                buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
             int y = 5;
             if (model.Animations != null)
             {
@@ -344,6 +307,9 @@ void main()
             public int StartIndex;
             public bool Index32;
         }
+
+        private bool pbrEnabled = true;
+        private bool hasPbr = false;
         
         //Unsafe required to use System.Numerics under OpenTK
         unsafe void DrawNode(ModelNode node, Matrix4x4 parent)
@@ -360,35 +326,58 @@ void main()
             else
                 selfTransform = node.Transform;
             //
+            void BindTexture(TextureInfo tex, TextureUnit unit)
+            {
+                GL.ActiveTexture(unit);
+                if (tex == null ||
+                    string.IsNullOrWhiteSpace(tex.Name) ||
+                    !textures.TryGetValue(tex.Name, out var pbrTex))
+                {
+                    GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+                }
+                else
+                {
+                    GL.BindTexture(TextureTarget.Texture2D, pbrTex);
+                }
+            }
             var mymat = selfTransform * parent;
             if (node.Geometry != null) //some models will have empty nodes purely for transforms
             {
-                GL.UniformMatrix4(uniform_world, 1, false, (float*) &mymat);
                 Matrix4x4.Invert(mymat, out var normalmat);
                 normalmat = Matrix4x4.Transpose(normalmat);
-                GL.UniformMatrix4(uniform_normal, 1, false, (float*) &normalmat);
+                
+                diffuseShader.Set("world", mymat);
+                diffuseShader.Set("normalmat", normalmat);
+                
+                pbrShader.Set("world", mymat);
+                pbrShader.Set("normalmat", normalmat);
                 var off = (BufferOffset) node.Geometry.UserTag;
+                
                 foreach (var tg in node.Geometry.Groups)
                 {
-                    GL.Uniform4(uniform_mat_diffuse, tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
+                    var isPbr = (tg.Material.MetallicRoughness && pbrEnabled);
+                    Shader sh = isPbr
+                        ? pbrShader
+                        : diffuseShader;
+                    sh.Use();
+                    sh.Set("mat_diffuse", tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
                         tg.Material.DiffuseColor.Z, 1);
-                    GL.Uniform3(uniform_mat_emissive, tg.Material.EmissiveColor.X, tg.Material.EmissiveColor.Y, tg.Material.EmissiveColor.Z);
-                    GL.ActiveTexture(TextureUnit.Texture0);
-                    if (string.IsNullOrWhiteSpace(tg.Material.DiffuseTexture) ||
-                        !textures.TryGetValue(tg.Material.DiffuseTexture, out var tex)) {
-                        GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+                    sh.Set("mat_emissive", tg.Material.EmissiveColor.X, tg.Material.EmissiveColor.Y,
+                        tg.Material.EmissiveColor.Z);
+                    if (isPbr)
+                    {
+                        sh.SetF("mat_roughness", tg.Material.RoughnessFactor);
+                        sh.SetF("mat_metallic", tg.Material.MetallicFactor);
+                        sh.SetI("texcoord_metallicRoughness", tg.Material.MetallicRoughnessTexture?.CoordinateIndex ?? 0);
+                        BindTexture(tg.Material.MetallicRoughnessTexture, TextureUnit.Texture3);
                     }
-                    else {
-                        GL.BindTexture(TextureTarget.Texture2D, tex);
-                    }
-                    GL.ActiveTexture(TextureUnit.Texture1);
-                    if (string.IsNullOrWhiteSpace(tg.Material.EmissiveTexture) ||
-                        !textures.TryGetValue(tg.Material.EmissiveTexture, out var emissivetex)) {
-                        GL.BindTexture(TextureTarget.Texture2D, nullTexture);
-                    }
-                    else {
-                        GL.BindTexture(TextureTarget.Texture2D, emissivetex);
-                    }
+                    BindTexture(tg.Material.NormalTexture, TextureUnit.Texture2);
+                    sh.SetI("texcoord_normal", tg.Material.NormalTexture?.CoordinateIndex ?? 0);
+                    sh.SetI("mat_normalMap", tg.Material.NormalTexture != null ? 1 : 0);
+                    BindTexture(tg.Material.EmissiveTexture, TextureUnit.Texture1);
+                    sh.SetI("texcoord_diffuse", tg.Material.DiffuseTexture?.CoordinateIndex ?? 0);
+                    sh.SetI("texcoord_emissive", tg.Material.EmissiveTexture?.CoordinateIndex ?? 0);
+                    BindTexture(tg.Material.DiffuseTexture, TextureUnit.Texture0);
                     GL.DrawElementsBaseVertex(
                         node.Geometry.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
                         tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
@@ -454,21 +443,25 @@ void main()
             
             if (model != null)
             {
-                GL.UseProgram(shader.ID);
+                
                 GL.BindVertexArray(vao);
                 //generate camera matrix based off model dimensions
                 
                 var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60), (float) Size.X / Size.Y,
                     0.02f, 10000);
-                var view = Matrix4.LookAt(new Vector3(0, 0, (-modelRadius * 4) * zoom), Vector3.Zero, Vector3.UnitY);
+                var campos = new Vector3(0, 0, (-modelRadius * 4) * zoom);
+                var view = Matrix4.LookAt(campos, Vector3.Zero, Vector3.UnitY);
                 var vp = view * projection;
-                GL.UniformMatrix4(uniform_vp, false, ref vp);
-
+                diffuseShader.Set("viewprojection", vp);
                 var mscale = modelRadius / 500.0f;
                 if (mscale < 1)
                     mscale = 1;
                 var lp = new Vector3(0.0f, -10.0f, -1000.0f * mscale);
-                GL.Uniform3(uniform_light_pos, lp);
+                diffuseShader.Set("viewprojection", vp);
+                diffuseShader.Set("light_direction", -0.49999f, 0.707107f, 0.5f);
+                pbrShader.Set("viewprojection", vp);
+                pbrShader.Set("light_direction", 0.0f, 0.5f, -0.5f);
+                pbrShader.Set("camera_pos", campos.X, campos.Y, campos.Z);
                 //draw starting at first root node.
                 for (int i = 0; i < model.Roots.Length; i++)
                 {
@@ -477,6 +470,7 @@ void main()
                 //reset texture state
                 GL.ActiveTexture(TextureUnit.Texture0);
             }
+            //Draw UI
             text.Start(sz.X, sz.Y);
             foreach (var b in buttons)
             {

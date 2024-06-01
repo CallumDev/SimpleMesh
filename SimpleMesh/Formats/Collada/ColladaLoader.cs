@@ -179,7 +179,7 @@ namespace SimpleMesh.Formats.Collada
                 if (obj.Item is common_color_or_texture_typeTexture tex)
                 {
                     material.DiffuseColor = Vector4.One;
-                    material.DiffuseTexture = tex.texture;
+                    material.DiffuseTexture = new TextureInfo(tex.texture, 0);
                 }
             }
         }
@@ -372,8 +372,11 @@ namespace SimpleMesh.Formats.Collada
                         Transform.ToYUp(up, sourceXYZ.GetXYZ(pRefs[idx + offXYZ])),
                         offNORMAL == int.MinValue ? Vector3.Zero : Transform.ToYUp(up, sourceNORMAL.GetXYZ(pRefs[idx + offNORMAL])),
                         offCOLOR == int.MinValue ? Vector4.One : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]),
+                        Vector4.Zero,
                         offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]),
-                        offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2])
+                        offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2]),
+                        Vector2.Zero,
+                        Vector2.Zero
                     );
                     indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
                 }

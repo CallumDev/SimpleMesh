@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -162,7 +161,7 @@ namespace SimpleMesh.Formats.GLTF
                 }
             }
 
-            string GetTexture(JsonElement element, string propertyName)
+            TextureInfo GetTexture(JsonElement element, string propertyName)
             {
                 if (element.TryGetProperty(propertyName, out var prop)
                     && textureSources != null
@@ -177,7 +176,10 @@ namespace SimpleMesh.Formats.GLTF
                     var img = images[textureSources[tex.GetInt32()]];
                     if (img.Data != null)
                         referencedImages[img.Name] = img;
-                    return img.Name;
+                    int texCoord = 0;
+                    if (prop.TryGetProperty("texCoord", out var texCoordProp))
+                        texCoord = texCoordProp.GetInt32();
+                    return new TextureInfo(img.Name, texCoord);
                 }
                 return null;
             }
@@ -199,6 +201,7 @@ namespace SimpleMesh.Formats.GLTF
                             mat.EmissiveColor = col;
                     }
                     mat.EmissiveTexture = GetTexture(m, "emissiveTexture");
+                    mat.NormalTexture = GetTexture(m, "normalTexture");
                     // KHR_materials_pbrSpecularGlossiness is deprecated, but some models out there still use it
                     // though you won't find many viewers that support this one!
                     // We are only extracting diffuse information out of this, so it should be fine.
@@ -223,6 +226,14 @@ namespace SimpleMesh.Formats.GLTF
                                 mat.DiffuseColor = new Vector4(colRgb, 1.0f);
                         }
                         mat.DiffuseTexture = GetTexture(pbr, "baseColorTexture");
+                        mat.MetallicRoughness = true;
+                        mat.MetallicRoughnessTexture = GetTexture(pbr, "metallicRoughnessTexture");
+                        mat.MetallicFactor = 1;
+                        mat.RoughnessFactor = 1;
+                        if (pbr.TryGetProperty("metallicFactor", out var fac))
+                            mat.MetallicFactor = fac.GetSingle();
+                        if (pbr.TryGetProperty("roughessFactor", out var rgh))
+                            mat.RoughnessFactor = rgh.GetSingle();
                     }
 
                     materials[k++] = mat;

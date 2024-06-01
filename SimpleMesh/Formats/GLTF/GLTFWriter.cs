@@ -21,17 +21,34 @@ internal static class GLTFWriter
 
     private static JsonNode FromMaterial(Material src, Dictionary<string, int> textureMap)
     {
+        bool GetTextureJson(TextureInfo info, out JsonObject obj)
+        {
+            obj = null;
+            if (info == null || string.IsNullOrEmpty(info.Name) ||
+                !textureMap.TryGetValue(info.Name, out var index))
+                return false;
+            if (info.CoordinateIndex != 0)
+                obj = new JsonObject { { "index", index }, { "texCoord", info.CoordinateIndex } };
+            else
+                obj = new JsonObject { { "index", index } };
+            return true;
+        }
         var pbrMetallicRoughness = new JsonObject
         {
             {
                 "baseColorFactor",
                 new JsonArray { src.DiffuseColor.X, src.DiffuseColor.Y, src.DiffuseColor.Z, src.DiffuseColor.W }
             },
-            { "metallicFactor", 0f },
-            { "roughnessFactor", 1f }
         };
-        if (!string.IsNullOrWhiteSpace(src.DiffuseTexture) && textureMap.TryGetValue(src.DiffuseTexture, out var index))
-            pbrMetallicRoughness.Add("baseColorTexture", new JsonObject { { "index", index } });
+        if(GetTextureJson(src.DiffuseTexture, out var baseColorTexture))
+            pbrMetallicRoughness.Add("baseColorTexture", baseColorTexture);
+        if (src.MetallicRoughness)
+        {
+            pbrMetallicRoughness.Add("metallicFactor", src.MetallicFactor);
+            pbrMetallicRoughness.Add("roughnessFactor", src.RoughnessFactor);
+            if(GetTextureJson(src.MetallicRoughnessTexture, out var metallicRoughnessTexture))
+                pbrMetallicRoughness.Add("metallicRoughnessTexture", metallicRoughnessTexture);
+        }
         var mat = new JsonObject
         {
             {"name", src.Name},
@@ -41,8 +58,8 @@ internal static class GLTFWriter
         };
         if(src.EmissiveColor != Vector3.Zero)
             mat.Add("emissiveFactor", new JsonArray() { src.EmissiveColor.X, src.EmissiveColor.Y, src.EmissiveColor.Z });
-        if (!string.IsNullOrWhiteSpace(src.EmissiveTexture) && textureMap.TryGetValue(src.EmissiveTexture, out index))
-            mat.Add("emissiveTexture", new JsonObject { { "index", index } });
+        if(GetTextureJson(src.EmissiveTexture, out var emissiveTexture))
+            mat.Add("emissiveTexture", new JsonObject { { "emissiveTexture", emissiveTexture }});
         return mat;
     }
 

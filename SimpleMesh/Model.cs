@@ -134,6 +134,20 @@ namespace SimpleMesh
             return this;
         }
 
+        public unsafe Model CalculateTangents(bool overwrite, bool normalMapped)
+        {
+            foreach (var g in Geometries)
+            {
+                if (!overwrite & ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent))
+                    continue; //Tangents already exist
+                if (normalMapped && g.Groups.All(x => x.Material?.NormalTexture == null))
+                    continue; //Don't calculate tangents on non-normal mapped model
+                g.Attributes |= VertexAttributes.Tangent;
+                TangentGeneration.GenerateMikkTSpace(g);
+            }
+            return this;
+        }
+
         public Model MergeTriangleGroups(Predicate<Material> canMerge = null)
         {
             foreach(var node in AllNodes().Where(x => x.Geometry != null))
