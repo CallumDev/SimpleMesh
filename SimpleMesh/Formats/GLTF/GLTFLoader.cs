@@ -249,19 +249,21 @@ namespace SimpleMesh.Formats.GLTF
                 };
             }
 
+            //Load nodes and scene
+            if (!jsonRoot.TryGetProperty("nodes", out var nodesElement)) {
+                throw new ModelLoadException("glTF file contains no objects");
+            }
+            
             //Meshes
             var meshes = new Geometry[meshesElement.GetArrayLength()];
             k = 0;
             foreach (var m in meshesElement.EnumerateArray())
             {
-                meshes[k] = GLTFGeometry.FromMesh(m, materials, accessors);
+                meshes[k] = GLTFGeometry.FromMesh(m, nodesElement, k, materials, accessors);
                 k++;
             }
             
-            //Load nodes and scene
-            if (!jsonRoot.TryGetProperty("nodes", out var nodesElement)) {
-                throw new ModelLoadException("glTF file contains no objects");
-            }
+            
 
             var nodes = new GLTFNode[nodesElement.GetArrayLength()];
             k = 0;
@@ -275,15 +277,16 @@ namespace SimpleMesh.Formats.GLTF
                 Vector3 translation = Vector3.Zero;
                 Vector3 scale = Vector3.One;
                 Quaternion rotation = Quaternion.Identity;
+                string errName = string.IsNullOrEmpty(nodes[k].Name) ? "NONAME" : $"'{nodes[k].Name}'";
                 if (n.TryGetProperty("translation", out var trElem) &&
                     !TryGetVector3(trElem, out translation))
-                    throw new ModelLoadException("node has malformed translation element");
+                    throw new ModelLoadException($"node {errName} has malformed translation element");
                 if (n.TryGetProperty("rotation", out var rotElem) &&
                     !TryGetQuaternion(rotElem, out rotation))
-                    throw new ModelLoadException("node has malformed rotation element");
+                    throw new ModelLoadException($"node {errName} has malformed rotation element");
                 if (n.TryGetProperty("scale", out var scElem) &&
                     !TryGetVector3(scElem, out scale))
-                    throw new ModelLoadException("node has malformed scale element");
+                    throw new ModelLoadException($"node {errName} has malformed scale element");
                 nodes[k].Transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) *
                                      Matrix4x4.CreateTranslation(translation);
                 if (n.TryGetProperty("children", out var childElem))

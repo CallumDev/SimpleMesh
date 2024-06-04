@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Numerics;
 using System.Text.Json;
 
@@ -8,13 +7,34 @@ namespace SimpleMesh.Formats.GLTF
 {
     static class GLTFGeometry
     {
-        public static Geometry FromMesh(JsonElement element, Material[] materials,GLTFBufferAccessor[] accessors)
+        public static Geometry FromMesh(JsonElement element, JsonElement nodesElement, int geoIdx, Material[] materials,GLTFBufferAccessor[] accessors)
         {
+            string GError(string error)
+            {
+                List<string> referencedBy = new List<string>();
+                int k = 0;
+                foreach (var n in nodesElement.EnumerateArray())
+                {
+                    
+                    if (!n.TryGetProperty("mesh", out var meshElement))
+                        continue;
+                    var idx = meshElement.GetInt32();
+                    if (idx != geoIdx)
+                        continue;
+                    if (n.TryGetProperty("name", out var nameElement))
+                        referencedBy.Add(nameElement.GetString());
+                    else
+                        referencedBy.Add($"NONAME (index {k})");
+                    k++;
+                }
+                return $"{error}\nReferenced By: {String.Join(',', referencedBy)}";
+            }
+
             var g = new Geometry();
             if (element.TryGetProperty("name", out var nameProp))
                 g.Name = nameProp.GetString();
             if (!element.TryGetProperty("primitives", out var primArray))
-                throw new ModelLoadException("mesh does not contain primitives");
+                throw new ModelLoadException(GError("mesh does not contain primitives"));
             VertexBufferBuilder vertexArray = new VertexBufferBuilder();
             int startIndex = 0;
             List<uint> indexArray = new List<uint>();
@@ -24,14 +44,24 @@ namespace SimpleMesh.Formats.GLTF
             foreach (var prim in primArray.EnumerateArray())
             {
                 if (!prim.TryGetProperty("attributes", out var attrArray))
-                    throw new ModelLoadException("mesh primitive does not contain attributes");
+                    throw new ModelLoadException(GError("mesh primitive does not contain attributes"));
 
                 if (!prim.TryGetProperty("mode", out var modeProp) 
                     || !modeProp.TryGetInt32(out var mode))
                     mode = 4;
 
-                if (startMode != -1 && startMode != mode) {
-                    throw new ModelLoadException("mesh primitive has mismatching mode " + mode);
+                string ModeName(int m) => m switch
+                {
+                    0 => "points",
+                    1 => "lines",
+                    4 => "triangles",
+                    _ => $"unknown (mode {m})"
+                };
+                
+                if (startMode != -1 && startMode != mode)
+                {
+                    throw new ModelLoadException(
+                        GError($"mesh primitive has both {ModeName(startMode)} and {ModeName(mode)}"));
                 }
                 startMode = mode;
 
@@ -173,7 +203,7 @@ namespace SimpleMesh.Formats.GLTF
                     g.Kind = GeometryKind.Lines;
                     break;
                 default:
-                    throw new Exception("Unsupported primitive mode " + startMode);
+                    throw new Exception(GError("Unsupported primitive mode " + startMode));
             }
             g.Vertices = vertexArray.Vertices.ToArray();
             g.Indices = Indices.FromBuffer(indexArray.ToArray());
