@@ -59,7 +59,7 @@ internal static class GLTFWriter
         if(src.EmissiveColor != Vector3.Zero)
             mat.Add("emissiveFactor", new JsonArray() { src.EmissiveColor.X, src.EmissiveColor.Y, src.EmissiveColor.Z });
         if(GetTextureJson(src.EmissiveTexture, out var emissiveTexture))
-            mat.Add("emissiveTexture", new JsonObject { { "emissiveTexture", emissiveTexture }});
+            mat.Add("emissiveTexture", emissiveTexture);
         return mat;
     }
 
