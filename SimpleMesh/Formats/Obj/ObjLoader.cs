@@ -54,6 +54,8 @@ namespace SimpleMesh.Formats.Obj
             Span<ParseHelpers.SplitElement> maxFacePoints = stackalloc ParseHelpers.SplitElement[512];
             Span<ObjVertex> faceElements = stackalloc ObjVertex[512];
             Span<ObjVertex> triangulatedElements = stackalloc ObjVertex[512];
+
+            bool isL = false, isF = false;
             
             while ((src_line = reader.ReadLine()) != null)
             {
@@ -87,12 +89,62 @@ namespace SimpleMesh.Formats.Obj
                 {
                     throw new ModelLoadException($"Non-polygon data not supported. (Line {lineNo})");
                 }
-                else if (IsParam(ln ,'l'))
+                else if (IsParam(ln ,'l') && GetParam(ln, out param))
                 {
-                    //Ignore
+                    if(isF)
+                        throw new ModelLoadException($"Object '{currentNode.Name}' contains both lines and triangles (Line {lineNo})");
+                    isL = true;
+                    // Lines element
+                    var lCount = ParseHelpers.FixedSplit(param, maxFacePoints);
+                    if (lCount < 2)
+                        throw new ModelLoadException($"Bad line element at line {lineNo}");
+                    if (lCount == int.MaxValue)
+                        throw new ModelLoadException($"Too many elements in l at line {lineNo}");
+                    for (int i = 0; i < lCount; i++)
+                    {
+                        faceElements[i] = ParseVertex(param.Slice(maxFacePoints[i].Start, maxFacePoints[i].Length), lineNo);
+                    }
+                    Span<ObjVertex> vtx = faceElements.Slice(0, lCount);
+                    if(vtx.Length < 2)
+                        throw new ModelLoadException($"Bad line element at line {lineNo}");
+                    for (int i = 0; i < vtx.Length; i++)
+                    {
+                        if(!ResolveVertex(ref vtx[i], positions.Count, normals.Count, texcoords.Count))
+                            throw new ModelLoadException($"Bad line element at line {lineNo}");
+                    }
+                    if (vtx.Length > 2) {
+                        int oidx = 0;
+                        for (int i = 1; i < vtx.Length - 1; i++)
+                        {
+                            if (oidx + 2 >= triangulatedElements.Length)
+                                throw new ModelLoadException($"Too many elements in l on line {lineNo}");
+                            triangulatedElements[oidx++] = vtx[i - 1];
+                            triangulatedElements[oidx++] = vtx[i];
+                        }
+                        vtx = triangulatedElements.Slice(0, oidx);
+                    }
+                    for (int i = 0; i < vtx.Length; i++)
+                    {
+                        var ov = vtx[i];
+                        var v = new Vertex() {
+                            Position = positions[ov.Position], Diffuse = Vector4.One
+                        };
+                        if (ov.Normal != -1) {
+                            attributes |= VertexAttributes.Normal;
+                            v.Normal = normals[ov.Normal];
+                        }
+                        if (ov.TexCoord != -1) {
+                            attributes |= VertexAttributes.Texture1;
+                            v.Texture1 = texcoords[ov.TexCoord];
+                        }
+                        currentIndices.Add((uint)currentVertex.Add(ref v));
+                    }
                 }
                 else if (IsParam(ln, 'f') && GetParam(ln, out param))
                 {
+                    if (isL)
+                        throw new ModelLoadException($"Object '{currentNode.Name}' contains both lines and triangles (Line {lineNo})");
+                    isF = true;
                     var fCount = ParseHelpers.FixedSplit(param, maxFacePoints);
                     if(fCount < 3)
                         throw new ModelLoadException($"Bad face element at line {lineNo}");
@@ -152,32 +204,38 @@ namespace SimpleMesh.Formats.Obj
                     }
                     else
                     {
-                        if (lastIndex != currentIndices.Count)
+                        if (currentIndices.Count != 0)
                         {
-                            var tg = new TriangleGroup()
+                            if (lastIndex != currentIndices.Count)
                             {
-                                BaseVertex = currentVertex.BaseVertex,
-                                IndexCount = (currentIndices.Count - lastIndex),
-                                StartIndex = lastIndex,
-                                Material = GetMaterial(currentMaterial ?? "default")
-                            };
-                            currentGroups.Add(tg);
+                                var tg = new TriangleGroup()
+                                {
+                                    BaseVertex = currentVertex.BaseVertex,
+                                    IndexCount = (currentIndices.Count - lastIndex),
+                                    StartIndex = lastIndex,
+                                    Material = GetMaterial(currentMaterial ?? "default")
+                                };
+                                currentGroups.Add(tg);
+                            }
+
+                            currentNode.Geometry = new Geometry();
+                            currentNode.Geometry.Attributes = attributes;
+                            currentNode.Geometry.Vertices = currentVertex.Vertices.ToArray();
+                            currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
+                            currentNode.Geometry.Groups = currentGroups.ToArray();
+                            currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
+                            geometries.Add(currentNode.Geometry);
                         }
-                        currentNode.Geometry = new Geometry();
-                        currentNode.Geometry.Attributes = attributes;
-                        currentNode.Geometry.Vertices = currentVertex.Vertices.ToArray();
-                        currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
-                        currentNode.Geometry.Groups = currentGroups.ToArray();
-                        geometries.Add(currentNode.Geometry);
                         if (currentNode == rootNode)
                         {
-                            currentNode = new ModelNode() {Name = objname.ToString()};
+                            currentNode = new ModelNode() { Name = objname.ToString() };
                         }
                         else
                         {
                             rootNode.Children.Add(currentNode);
                             currentNode = new ModelNode() { Name = objname.ToString() };
                         }
+                        isL = isF = false;
                         currentVertex = new VertexBufferBuilder();
                         currentIndices = new List<uint>();
                         currentGroups = new List<TriangleGroup>();
@@ -226,12 +284,18 @@ namespace SimpleMesh.Formats.Obj
                 };
                 currentGroups.Add(tg);
             }
-            currentNode.Geometry = new Geometry();
-            currentNode.Geometry.Attributes = attributes;
-            currentNode.Geometry.Vertices = currentVertex.Vertices.ToArray();
-            currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
-            currentNode.Geometry.Groups = currentGroups.ToArray();
-            geometries.Add(currentNode.Geometry);
+            
+            if (currentIndices.Count > 0)
+            {
+                currentNode.Geometry = new Geometry();
+                currentNode.Geometry.Attributes = attributes;
+                currentNode.Geometry.Vertices = currentVertex.Vertices.ToArray();
+                currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
+                currentNode.Geometry.Groups = currentGroups.ToArray();
+                currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
+                geometries.Add(currentNode.Geometry);
+            }
+            
             if(currentNode != rootNode)
                 rootNode.Children.Add(currentNode);
             model.Geometries = geometries.ToArray();
