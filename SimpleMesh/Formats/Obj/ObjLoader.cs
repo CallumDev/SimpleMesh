@@ -176,7 +176,7 @@ namespace SimpleMesh.Formats.Obj
                         else
                         {
                             rootNode.Children.Add(currentNode);
-                            currentNode = new ModelNode();
+                            currentNode = new ModelNode() { Name = objname.ToString() };
                         }
                         currentVertex = new VertexBufferBuilder();
                         currentIndices = new List<uint>();
