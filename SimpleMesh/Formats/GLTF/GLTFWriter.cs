@@ -37,7 +37,7 @@ internal static class GLTFWriter
         {
             {
                 "baseColorFactor",
-                new JsonArray { src.DiffuseColor.X, src.DiffuseColor.Y, src.DiffuseColor.Z, src.DiffuseColor.W }
+                new JsonArray { src.DiffuseColor.R, src.DiffuseColor.G, src.DiffuseColor.B, src.DiffuseColor.A }
             },
         };
         if(GetTextureJson(src.DiffuseTexture, out var baseColorTexture))

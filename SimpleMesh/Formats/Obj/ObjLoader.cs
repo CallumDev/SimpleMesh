@@ -39,7 +39,7 @@ namespace SimpleMesh.Formats.Obj
             Material GetMaterial(string name) {
                 if (!model.Materials.TryGetValue(name, out Material x))
                 {
-                    x = new Material() {DiffuseColor = Vector4.One, Name = name};
+                    x = new Material() {DiffuseColor = LinearColor.White, Name = name};
                     model.Materials.Add(name, x);
                 }
                 return x;

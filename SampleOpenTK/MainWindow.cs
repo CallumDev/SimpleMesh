@@ -360,8 +360,8 @@ namespace SampleOpenTK
                         ? pbrShader
                         : diffuseShader;
                     sh.Use();
-                    sh.Set("mat_diffuse", tg.Material.DiffuseColor.X, tg.Material.DiffuseColor.Y,
-                        tg.Material.DiffuseColor.Z, 1);
+                    sh.Set("mat_diffuse", tg.Material.DiffuseColor.R, tg.Material.DiffuseColor.G,
+                        tg.Material.DiffuseColor.B, tg.Material.DiffuseColor.A);
                     sh.Set("mat_emissive", tg.Material.EmissiveColor.X, tg.Material.EmissiveColor.Y,
                         tg.Material.EmissiveColor.Z);
                     if (isPbr)

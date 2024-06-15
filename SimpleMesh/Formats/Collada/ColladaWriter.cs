@@ -65,7 +65,7 @@ public class ColladaWriter
                         {
                             ambient = ColladaColor("ambient", new Vector4(0, 0, 0, 1)),
                             emission = ColladaColor("emmision", new Vector4(0, 0, 0, 1)),
-                            diffuse = ColladaColor("diffuse", x.Value.DiffuseColor),
+                            diffuse = ColladaColor("diffuse", x.Value.DiffuseColor.ToSrgb()),
                             specular = ColladaColor("specular", new Vector4(0.25f, 0.25f, 0.25f, 1f)),
                             shininess = ColladaFloat("shininess", 50),
                             index_of_refraction = ColladaFloat("index_of_refraction", 1)

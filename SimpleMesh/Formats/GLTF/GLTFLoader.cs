@@ -194,7 +194,7 @@ namespace SimpleMesh.Formats.GLTF
                     if (!m.TryGetProperty("name", out var matname))
                         throw new ModelLoadException("material missing name property");
                     var mat = new Material {Name = matname.GetString()};
-                    mat.DiffuseColor = Vector4.One; // Default colour
+                    mat.DiffuseColor = LinearColor.White; // Default colour
                     if (m.TryGetProperty("emissiveFactor", out var emissiveCol))
                     {
                         if (TryGetVector3(emissiveCol, out var col))
@@ -210,9 +210,9 @@ namespace SimpleMesh.Formats.GLTF
                         if(specGloss.TryGetProperty("diffuseFactor", out var baseCol))
                         {
                             if (GetFloatArray(baseCol, 4, out var colFactor))
-                                mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
+                                mat.DiffuseColor = new LinearColor(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
                             else if (TryGetVector3(baseCol, out var colRgb))
-                                mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                                mat.DiffuseColor = new LinearColor(colRgb.X, colRgb.Y, colRgb.Z, 1.0f);
                         }
                         mat.DiffuseTexture = GetTexture(specGloss, "diffuseTexture");
                     }
@@ -221,9 +221,9 @@ namespace SimpleMesh.Formats.GLTF
                         if (pbr.TryGetProperty("baseColorFactor", out var baseCol))
                         {
                             if (GetFloatArray(baseCol, 4, out var colFactor))
-                                mat.DiffuseColor = new Vector4(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
+                                mat.DiffuseColor = new LinearColor(colFactor[0], colFactor[1], colFactor[2], colFactor[3]);
                             else if (TryGetVector3(baseCol, out var colRgb))
-                                mat.DiffuseColor = new Vector4(colRgb, 1.0f);
+                                mat.DiffuseColor = new LinearColor(colRgb.X, colRgb.Y, colRgb.Z, 1.0f);
                         }
                         mat.DiffuseTexture = GetTexture(pbr, "baseColorTexture");
                         mat.MetallicRoughness = true;
@@ -245,7 +245,7 @@ namespace SimpleMesh.Formats.GLTF
                 materials[0] = new Material()
                 {
                     Name = "default",
-                    DiffuseColor = Vector4.One
+                    DiffuseColor = LinearColor.White
                 };
             }
 

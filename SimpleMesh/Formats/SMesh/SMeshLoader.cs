@@ -29,7 +29,7 @@ namespace SimpleMesh.Formats.SMesh
                 {
                     Name = reader.ReadStringUTF8(),
                     DiffuseTexture = ReadTexInfo(reader),
-                    DiffuseColor = reader.ReadVector4(),
+                    DiffuseColor = reader.ReadLinearColor(),
                     EmissiveTexture = ReadTexInfo(reader),
                     EmissiveColor = reader.ReadVector3(),
                     NormalTexture = ReadTexInfo(reader),

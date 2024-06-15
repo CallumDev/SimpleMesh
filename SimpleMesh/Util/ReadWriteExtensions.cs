@@ -69,6 +69,14 @@ namespace SimpleMesh.Util
             writer.Write(vec.W);
         }
         
+        public static void Write(this BinaryWriter writer, LinearColor vec)
+        {
+            writer.Write(vec.R);
+            writer.Write(vec.G);
+            writer.Write(vec.B);
+            writer.Write(vec.A);
+        }
+        
         public static void Write(this BinaryWriter writer, Vector3 vec)
         {
             writer.Write(vec.X);
@@ -85,6 +93,11 @@ namespace SimpleMesh.Util
         public static Vector4 ReadVector4(this BinaryReader reader)
         {
             return new Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+        }
+        
+        public static LinearColor ReadLinearColor(this BinaryReader reader)
+        {
+            return new LinearColor(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
         }
         
         public static Vector3 ReadVector3(this BinaryReader reader)

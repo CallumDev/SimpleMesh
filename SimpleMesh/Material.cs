@@ -7,7 +7,7 @@ namespace SimpleMesh
     public class Material
     {
         public string Name;
-        public Vector4 DiffuseColor;
+        public LinearColor DiffuseColor;
         public Vector3 EmissiveColor;
         public TextureInfo DiffuseTexture;
         public TextureInfo EmissiveTexture;

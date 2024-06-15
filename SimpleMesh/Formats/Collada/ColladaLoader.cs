@@ -140,7 +140,7 @@ namespace SimpleMesh.Formats.Collada
 
             Material ParseMaterial(material src, string name)
             {
-                var cmat = new Material() {Name = name, DiffuseColor = Vector4.One};
+                var cmat = new Material() {Name = name, DiffuseColor = LinearColor.White};
                 if (matlib == null) return cmat;
                 if (src == null) return cmat;
                 if (src.instance_effect == null) return cmat;
@@ -174,11 +174,12 @@ namespace SimpleMesh.Formats.Collada
                 if (obj == null) return;
                 if (obj.Item is common_color_or_texture_typeColor col)
                 {
-                    ParseHelpers.TryParseColor(col.Text, out material.DiffuseColor);
+                    if(ParseHelpers.TryParseColor(col.Text, out var srgb))
+                        material.DiffuseColor = LinearColor.FromSrgb(srgb);
                 }
                 if (obj.Item is common_color_or_texture_typeTexture tex)
                 {
-                    material.DiffuseColor = Vector4.One;
+                    material.DiffuseColor = LinearColor.White;
                     material.DiffuseTexture = new TextureInfo(tex.texture, 0);
                 }
             }
