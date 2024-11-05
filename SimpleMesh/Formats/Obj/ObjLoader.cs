@@ -127,7 +127,7 @@ namespace SimpleMesh.Formats.Obj
                     {
                         var ov = vtx[i];
                         var v = new Vertex() {
-                            Position = positions[ov.Position], Diffuse = Vector4.One
+                            Position = positions[ov.Position], Diffuse = LinearColor.White
                         };
                         if (ov.Normal != -1) {
                             attributes |= VertexAttributes.Normal;
@@ -183,7 +183,7 @@ namespace SimpleMesh.Formats.Obj
                     {
                         var ov = vtx[i];
                         var v = new Vertex() {
-                            Position = positions[ov.Position], Diffuse = Vector4.One
+                            Position = positions[ov.Position], Diffuse = LinearColor.White
                         };
                         if (ov.Normal != -1) {
                             attributes |= VertexAttributes.Normal;

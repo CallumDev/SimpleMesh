@@ -100,10 +100,16 @@ internal static class GLTFWriter
             attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Select(x => x.Position).ToArray(), true, BufferTarget.Vertex)));
         if ((g.Attributes & VertexAttributes.Normal) != 0)
             attributes.Add(("NORMAL", ctx.AddVector3(g.Vertices.Select(x => x.Normal).ToArray(), false, BufferTarget.Vertex)));
+        if ((g.Attributes & VertexAttributes.Diffuse) != 0)
+            attributes.Add(("COLOR_0", ctx.AddLinearColor(g.Vertices.Select(x => x.Diffuse).ToArray())));
         if ((g.Attributes & VertexAttributes.Texture1) != 0)
             attributes.Add(("TEXCOORD_0", ctx.AddVector2(g.Vertices.Select(x => x.Texture1).ToArray())));
         if ((g.Attributes & VertexAttributes.Texture2) != 0)
             attributes.Add(("TEXCOORD_1", ctx.AddVector2(g.Vertices.Select(x => x.Texture2).ToArray())));
+        if ((g.Attributes & VertexAttributes.Texture3) != 0)
+            attributes.Add(("TEXCOORD_2", ctx.AddVector2(g.Vertices.Select(x => x.Texture3).ToArray())));
+        if ((g.Attributes & VertexAttributes.Texture4) != 0)
+            attributes.Add(("TEXCOORD_3", ctx.AddVector2(g.Vertices.Select(x => x.Texture4).ToArray())));
         var groups = new List<JsonObject>();
         foreach (var tg in g.Groups)
         {
@@ -445,6 +451,32 @@ internal static class GLTFWriter
             return Accessors.Count - 1;
         }
 
+        public int AddLinearColor(LinearColor[] source)
+        {
+            var byteStart = (int) BufferWriter.BaseStream.Position;
+            var byteLength = source.Length * 8;
+            // ReSharper disable once CompareOfFloatsByEqualityOperator
+            bool alpha = source.Any(x => x.A != 1f);
+            
+            foreach (var v in source)
+            {
+                BufferWriter.Write(v.R);
+                BufferWriter.Write(v.G);
+                BufferWriter.Write(v.B);
+                if(alpha)
+                    BufferWriter.Write(v.A);
+            }
+
+            Accessors.Add(new JsonObject
+            {
+                {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Vertex)},
+                {"componentType", 5126}, //float
+                {"count", source.Length},
+                {"type", alpha ? "VEC4" : "VEC3"}
+            });
+            return Accessors.Count - 1;
+        }
+        
         public int AddVector2(Vector2[] source)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;

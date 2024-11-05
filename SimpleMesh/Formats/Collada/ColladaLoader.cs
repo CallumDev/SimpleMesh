@@ -372,7 +372,7 @@ namespace SimpleMesh.Formats.Collada
                     var vert = new Vertex(
                         Transform.ToYUp(up, sourceXYZ.GetXYZ(pRefs[idx + offXYZ])),
                         offNORMAL == int.MinValue ? Vector3.Zero : Transform.ToYUp(up, sourceNORMAL.GetXYZ(pRefs[idx + offNORMAL])),
-                        offCOLOR == int.MinValue ? Vector4.One : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]),
+                        offCOLOR == int.MinValue ? LinearColor.White : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]),
                         Vector4.Zero,
                         offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]),
                         offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2]),
@@ -410,23 +410,13 @@ namespace SimpleMesh.Formats.Collada
                 offset = (int)acc.offset;
                 Count = (int)acc.count;
             }
-            public Vector4 GetColor(int index)
+            public LinearColor GetColor(int index)
             {
                 var i = offset + (index * stride);
                 if (stride == 4)
-                    return new Vector4(
-                        array[i],
-                        array[i + 1],
-                        array[i + 2],
-                        array[i + 3]
-                    );
+                    return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], array[i + 3]);
                 else if (stride == 3)
-                    return new Vector4(
-                        array[i],
-                        array[i + 1],
-                        array[i + 2],
-                        1
-                    );
+                    return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], 1);
                 else
                     throw new Exception("Color Unhandled stride " + stride);
             }

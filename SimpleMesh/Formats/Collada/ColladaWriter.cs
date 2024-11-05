@@ -220,7 +220,7 @@ public class ColladaWriter
         {
             colors = CreateSource(
                 geo.name + "-color",
-                k => src.Vertices[k].Diffuse, 
+                k => src.Vertices[k].Diffuse.ToSrgb(), 
                 4, src.Vertices.Length);
             sources.Add(colors);
             idxC++;

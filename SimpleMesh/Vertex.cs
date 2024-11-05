@@ -9,7 +9,7 @@ namespace SimpleMesh
     {
         public Vector3 Position;
         public Vector3 Normal;
-        public Vector4 Diffuse;
+        public LinearColor Diffuse;
         public Vector4 Tangent;
         public Vector2 Texture1;
         public Vector2 Texture2;
@@ -19,7 +19,7 @@ namespace SimpleMesh
         public Vertex(
             Vector3 pos, 
             Vector3 norm, 
-            Vector4 diffuse,
+            LinearColor diffuse,
             Vector4 tangent,
             Vector2 tex1, 
             Vector2 tex2,

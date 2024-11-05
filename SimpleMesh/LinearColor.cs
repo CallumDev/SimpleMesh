@@ -16,6 +16,8 @@ public record struct LinearColor(float R, float G, float B, float A)
     
     public Vector4 ToSrgb() =>
         new(LinearToSrgb(R), LinearToSrgb(G), LinearToSrgb(B), LinearToSrgb(A));
+
+    public static LinearColor FromVector4(Vector4 linear) => new(linear.X, linear.Y, linear.Z, linear.W);
     
     static float LinearToSrgb(float v) => v <= 0.0031308f
         ? v * 12.92f

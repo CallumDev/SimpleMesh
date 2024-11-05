@@ -77,12 +77,16 @@ vec3 getNormal()
     }
 }
 
+vec4 toSrgb(vec4 incol)
+{
+    vec3 srgb = pow(incol.rgb, vec3(1.0/2.2));
+    return vec4(srgb, incol.a);
+}
+
 void main()
 {
-    vec3 diffuse_srgb = pow(mat_diffuse.rgb,vec3(1.0/2.2));
-    vec4 mat_diffuse_srgb = vec4(diffuse_srgb, mat_diffuse.a);
     vec3 norm = getNormal();
-    vec4 baseColor = texture2D(mat_texture, texcoord[texcoord_diffuse]) * mat_diffuse_srgb * diffuse;
+    vec4 baseColor = texture2D(mat_texture, texcoord[texcoord_diffuse]) * toSrgb(mat_diffuse) * toSrgb(diffuse);
     vec4 sampledEmissive = texture2D(mat_emissiveTexture, texcoord[texcoord_emissive]);
     vec3 emissive = mat_emissive * sampledEmissive.rgb;
     // old-style non-pbr lighting.
@@ -209,7 +213,7 @@ void main()
     metallic = clamp(metallic, 0.0, 1.0);
     float alphaRoughness = perceptualRoughness * perceptualRoughness;
 
-    vec4 baseColor = SRGBtoLinear(texture2D(mat_texture, texcoord[texcoord_diffuse])) * mat_diffuse * SRGBtoLinear(diffuse);
+    vec4 baseColor = SRGBtoLinear(texture2D(mat_texture, texcoord[texcoord_diffuse])) * mat_diffuse * diffuse;
     
     vec3 f0 = vec3(0.04);
     vec3 diffuseColor = baseColor.rgb * (vec3(1.0) - f0);

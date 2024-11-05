@@ -93,7 +93,7 @@ namespace SimpleMesh.Formats.GLTF
                             tex4Index = elem.Value.GetInt32();
                             g.Attributes |= VertexAttributes.Texture4;
                             break;
-                        case "COLOR":
+                        case "COLOR_0":
                             colIndex = elem.Value.GetInt32();
                             g.Attributes |= VertexAttributes.Diffuse;
                             break;
@@ -110,7 +110,7 @@ namespace SimpleMesh.Formats.GLTF
                     for (int i = 0; i < indices.Count; i++)
                     {
                         var index = indices.GetIndex(i);
-                        var v = new Vertex() {Diffuse = Vector4.One};
+                        var v = new Vertex() {Diffuse = LinearColor.White};
                         v.Position = accessors[posIndex].GetVector3((int) index);
                         if (normIndex != -1)
                             v.Normal = accessors[normIndex].GetVector3((int) index);
@@ -135,9 +135,9 @@ namespace SimpleMesh.Formats.GLTF
                         if (colIndex != -1)
                         {
                             if (accessors[colIndex].Type == AccessorType.VEC3)
-                                v.Diffuse = new Vector4(accessors[colIndex].GetVector3((int) index), 1.0f);
+                                v.Diffuse = LinearColor.FromVector4(new Vector4(accessors[colIndex].GetVector3((int) index), 1.0f));
                             else
-                                v.Diffuse = accessors[colIndex].GetVector4((int) index);
+                                v.Diffuse = LinearColor.FromVector4(accessors[colIndex].GetVector4((int) index));
                         }
                         int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);
@@ -148,7 +148,7 @@ namespace SimpleMesh.Formats.GLTF
                     var c = accessors[posIndex].Count;
                     for (int index = 0; index < c; index++)
                     {
-                        var v = new Vertex() {Diffuse = Vector4.One};
+                        var v = new Vertex() {Diffuse = LinearColor.White};
                         v.Position = accessors[posIndex].GetVector3(index);
                         if (normIndex != -1)
                             v.Normal = accessors[normIndex].GetVector3(index);
@@ -173,9 +173,9 @@ namespace SimpleMesh.Formats.GLTF
                         if (colIndex != -1)
                         {
                             if (accessors[colIndex].Type == AccessorType.VEC3)
-                                v.Diffuse = new Vector4(accessors[colIndex].GetVector3(index), 1.0f);
+                                v.Diffuse = LinearColor.FromVector4(new Vector4(accessors[colIndex].GetVector3((int) index), 1.0f));
                             else
-                                v.Diffuse = accessors[colIndex].GetVector4(index);
+                                v.Diffuse = LinearColor.FromVector4(accessors[colIndex].GetVector4((int) index));
                         }
                         int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);

@@ -196,9 +196,9 @@ namespace SimpleMesh.Formats.SMesh
                 if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
                     g.Vertices[i].Normal = reader.ReadVector3();
                 if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
-                    g.Vertices[i].Diffuse = reader.ReadVector4();
+                    g.Vertices[i].Diffuse = reader.ReadLinearColor();
                 else
-                    g.Vertices[i].Diffuse = Vector4.One;
+                    g.Vertices[i].Diffuse = LinearColor.White;
                 if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
                     g.Vertices[i].Tangent = reader.ReadVector4();
                 if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
