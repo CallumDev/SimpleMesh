@@ -12,4 +12,8 @@
       <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
+    <ItemGroup>
+      <Folder Include="Convex\Quickhull\" />
+    </ItemGroup>
+
 </Project>

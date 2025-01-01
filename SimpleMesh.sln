@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleMesh", "SimpleMesh\Si
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleOpenTK", "SampleOpenTK\SampleOpenTK.csproj", "{817209E3-09EA-4E25-9CCD-0889AD56714E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleMesh.Tests", "SimpleMesh.Tests\SimpleMesh.Tests.csproj", "{6C52832A-55A3-4071-8C77-87CA67483DAD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{817209E3-09EA-4E25-9CCD-0889AD56714E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
