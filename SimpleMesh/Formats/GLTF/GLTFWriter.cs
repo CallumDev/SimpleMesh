@@ -454,10 +454,10 @@ internal static class GLTFWriter
         public int AddLinearColor(LinearColor[] source)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
-            var byteLength = source.Length * 8;
             // ReSharper disable once CompareOfFloatsByEqualityOperator
             bool alpha = source.Any(x => x.A != 1f);
-            
+            var byteLength = source.Length * (alpha ? 16 : 12);
+
             foreach (var v in source)
             {
                 BufferWriter.Write(v.R);
