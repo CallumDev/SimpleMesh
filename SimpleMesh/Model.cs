@@ -66,11 +66,20 @@ namespace SimpleMesh
             return this;
         }
 
+        static bool AlmostOne(Vector3 x)
+        {
+            const float TOLERANCE = 0.000001f;
+            return Math.Abs(x.X - 1) < TOLERANCE &&
+                   Math.Abs(x.Y - 1) < TOLERANCE && 
+                   Math.Abs(x.Z - 1) < TOLERANCE;
+        }
+
         static void ApplyScale(ModelNode node, Vector3 parentScale)
         {
             Matrix4x4.Decompose(node.Transform, out var scale, out var rotate, out var translate);
             var myScale = scale * parentScale;
-            if (myScale != Vector3.One) {
+            if (!AlmostOne(myScale)) 
+            {
                 if (node.Geometry != null)
                 {
                     for (int i = 0; i < node.Geometry.Vertices.Length; i++)
@@ -80,9 +89,13 @@ namespace SimpleMesh
                             Vector3.Normalize(myScale * node.Geometry.Vertices[i].Normal);
                     }
                 }
-
                 node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
-                                 Matrix4x4.CreateTranslation(translate * myScale);
+                                 Matrix4x4.CreateTranslation(translate * parentScale);
+            }
+            else if (!AlmostOne(parentScale))
+            {
+                node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
+                                 Matrix4x4.CreateTranslation(translate * parentScale);
             }
             foreach (var child in node.Children) {
                 ApplyScale(child, myScale);
