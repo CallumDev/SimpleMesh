@@ -49,6 +49,7 @@ namespace SampleOpenTK
         private Button openButton;
         private Button saveButton;
         private Button saveGltfButton;
+        private Button saveColladaButton;
         private Button pbrButton;
         
         private Dictionary<string, int> textures = new Dictionary<string, int>();
@@ -93,22 +94,28 @@ namespace SampleOpenTK
             {
                 var savefile = FilePicker.SaveFile();
                 if (savefile != null)
-                    SaveModel(savefile, false);
+                    SaveModel(savefile, ModelSaveFormat.SMesh);
             });
             saveGltfButton = new Button("Save To GLB", 5, 75, () =>
             {
                 var savefile = FilePicker.SaveFile();
                 if (savefile != null)
-                    SaveModel(savefile, true);
+                    SaveModel(savefile, ModelSaveFormat.GLB);
+            });
+            saveColladaButton = new Button("Save To Collada", 5, 110, () =>
+            {
+                var savefile = FilePicker.SaveFile();
+                if (savefile != null)
+                    SaveModel(savefile, ModelSaveFormat.Collada);
             });
 
-            pbrButton = new Button("PBR Enabled", 5, 110, () =>
+            pbrButton = new Button("PBR Enabled", 5, 145, () =>
             {
                 pbrEnabled = !pbrEnabled;
                 pbrButton.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
             });
-            
-            buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
+
+            buttons = [openButton];
             text = new Render2D();
         }
 
@@ -163,11 +170,11 @@ namespace SampleOpenTK
 
         private static readonly int VERTEX_SIZE = Marshal.SizeOf<Vertex>();
 
-        void SaveModel(string filename, bool gltf)
+        void SaveModel(string filename, ModelSaveFormat format)
         {
             if (model == null) return;
             using var stream = File.Create(filename);
-            model.SaveTo(stream, gltf ? ModelSaveFormat.GLB : ModelSaveFormat.SMesh);
+            model.SaveTo(stream, format);
         }
 
         void LoadModel(string filename)
@@ -277,10 +284,10 @@ namespace SampleOpenTK
             if (hasPbr)
             {
                 pbrButton.Text = "PBR Enabled";
-                buttons = new List<Button>(new[] { openButton, saveButton, saveGltfButton, pbrButton });
+                buttons = new List<Button>(new[] { openButton, saveButton, saveGltfButton, saveColladaButton, pbrButton });
             }
             else
-                buttons = new List<Button>(new[] {openButton, saveButton, saveGltfButton});
+                buttons = new List<Button>(new[] {openButton, saveButton, saveColladaButton, saveGltfButton});
             int y = 5;
             if (model.Animations != null)
             {

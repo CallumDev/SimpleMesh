@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SimpleMesh.Convex;
-using SimpleMesh.Formats.Collada.Schema;
 
 namespace SimpleMesh.Tests;
 

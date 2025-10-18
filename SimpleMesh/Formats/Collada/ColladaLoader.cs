@@ -1,449 +1,541 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Xml.Serialization;
-using SimpleMesh.Formats.Collada.Schema;
+using System.Xml.Linq;
 using SimpleMesh.Util;
 
-namespace SimpleMesh.Formats.Collada
+namespace SimpleMesh.Formats.Collada;
+
+static class ColladaLoader
 {
-    static class ColladaLoader
+    enum UpAxisType
     {
+        X_UP,
+        Y_UP,
+        Z_UP,
+    }
 
-        public static Model Load(Stream stream, ModelLoadContext ctx)
+    public static Model Load(Stream stream, ModelLoadContext ctx)
+    {
+        XDocument document;
+        try
         {
-            COLLADA dae;
-            using (var reader = new StreamReader(stream)) {
-                dae = (COLLADA)ColladaXml.Xml.Deserialize(reader);
-            }
-            //Get libraries
-            var geometrylib = dae.Items.OfType<library_geometries>().First();
-            var scenelib = dae.Items.OfType<library_visual_scenes>().First();
-            var matlib = dae.Items.FirstOfType<library_materials>();
-            var fxlib = dae.Items.FirstOfType<library_effects>();
-            var convGeo = new List<Geometry>();
-            //Get main scene
-            var urlscn = CheckURI(dae.scene.instance_visual_scene.url);
-            var scene = scenelib.visual_scene.Where((x) => x.id == urlscn).First();
-            var up = (UpAxis)dae.asset.up_axis;
-            var model = new Model();
-            var mataccess = new MaterialAccessor() {Model = model, context = ctx, matlib = matlib, fxlib = fxlib};
-            List<ModelNode> Nodes = new List<ModelNode>();
-            model.Materials = new Dictionary<string, Material>();
-            foreach(var node in scene.node) {
-                Nodes.Add(ProcessNode(up, geometrylib, convGeo, node, mataccess, ctx));
-            }
-            model.Roots = Nodes.ToArray();
-            model.Geometries = convGeo.ToArray();
-            return model;
+            document = XDocument.Load(stream);
         }
-        
-        static ModelNode ProcessNode(UpAxis up, library_geometries geom, List<Geometry> convGeo, node n, MaterialAccessor matlib, ModelLoadContext ctx)
+        catch (Exception e)
         {
-            var obj = new ModelNode();
-            obj.Name = n.name;
-            if(n.instance_geometry != null && n.instance_geometry.Length > 0) {
-                //Geometry object
-                if (n.instance_geometry.Length != 1) throw new ModelLoadException("Multiple geometries in node");
-                var uri = CheckURI(n.instance_geometry[0].url);
-                var g = geom.geometry.First((x) => x.id == uri);
-                if(g.Item is mesh)
-                {
-                    obj.Geometry = GetGeometry(up, g, matlib, ctx);
-                    convGeo.Add(obj.Geometry);
-                } 
-            }
-
-            if (n.Items != null)
-            {
-                if (n.Items.OfType<matrix>().Any())
-                {
-                    var tr = n.Items.OfType<matrix>().First();
-                    obj.Transform = GetMatrix(up, tr.Text);
-                }
-                else
-                {
-                    Matrix4x4 mat = Matrix4x4.Identity;
-                    foreach (var item in n.Items)
-                    {
-                        if (item is TargetableFloat3)
-                        {
-                            throw new ModelLoadException("Non-matrix transforms not yet supported");
-                        }
-                    }
-
-                    obj.Transform = mat;
-                }
-            }
-            if(n.node1 != null && n.node1.Length > 0) {
-                foreach(var node in n.node1) {
-                    obj.Children.Add(ProcessNode(up, geom, convGeo, node,matlib, ctx));
-                }
-            }
-            return obj;
-        }
-        
-        static Matrix4x4 GetMatrix(UpAxis ax, string text)
-        {
-            var floats = ParseHelpers.FloatArray(text);
-            Matrix4x4 mat;
-            if (floats.Length == 16)
-                mat = new Matrix4x4(
-                    floats[0], floats[4], floats[8], floats[12],
-                    floats[1], floats[5], floats[9], floats[13],
-                    floats[2], floats[6], floats[10], floats[14],
-                    floats[3], floats[7], floats[11], floats[15]
-                );
-            else if (floats.Length == 9)
-                mat = new Matrix4x4(
-                    floats[0], floats[1], floats[2], 0,
-                    floats[3], floats[4], floats[5], 0,
-                    floats[6], floats[7], floats[8], 0,
-                    0, 0, 0, 1
-                );
-            else
-                throw new Exception("Invalid Matrix: " + floats.Length + " elements");
-            return Transform.ToYUp(ax, mat);
-        }
-        
-        //collada semantic data streams
-        const string SEM_VERTEX = "VERTEX";
-        const string SEM_POSITION = "POSITION";
-        const string SEM_COLOR = "COLOR";
-        const string SEM_NORMAL = "NORMAL";
-        const string SEM_TEXCOORD = "TEXCOORD";
-
-        class MaterialAccessor
-        {
-            public Model Model;
-            public ModelLoadContext context;
-            public library_materials matlib;
-            public library_effects fxlib;
-            
-            public Material GetMaterial(string id)
-            {
-                if (string.IsNullOrWhiteSpace(id)) id = "DEFAULT";
-                var src = matlib?.material.FirstOrDefault(mat => mat.id.Equals(id, StringComparison.InvariantCulture));
-                var name = id;
-                if(src != null)
-                    name = string.IsNullOrWhiteSpace(src.name) ? src.id : src.name;
-                if (!Model.Materials.TryGetValue(name, out Material mat))
-                {
-                    mat = ParseMaterial(src, name);
-                    Model.Materials.Add(name, mat);
-                }
-                return mat;
-            }
-
-            Material ParseMaterial(material src, string name)
-            {
-                var cmat = new Material() {Name = name, DiffuseColor = LinearColor.White};
-                if (matlib == null) return cmat;
-                if (src == null) return cmat;
-                if (src.instance_effect == null) return cmat;
-                if (fxlib == null) return cmat;
-                var fx = fxlib.effect.FirstOrDefault(fx =>
-                    fx.id.Equals(CheckURI(src.instance_effect.url), StringComparison.InvariantCulture));
-                if (fx != null)
-                {
-                    var profile = fx.Items.FirstOfType<effectFx_profile_abstractProfile_COMMON>();
-                    if (profile == null) return cmat;
-                    if (profile.technique == null) return cmat;
-                    switch (profile.technique.Item)
-                    {
-                        case effectFx_profile_abstractProfile_COMMONTechniquePhong phong:
-                            SetDc(cmat, phong.diffuse);
-                            break;
-                        case effectFx_profile_abstractProfile_COMMONTechniqueBlinn blinn:
-                            SetDc(cmat, blinn.diffuse);
-                            break;
-                        /*case effectFx_profile_abstractProfile_COMMONTechniqueConstant constant:
-                            break;*/
-                        case effectFx_profile_abstractProfile_COMMONTechniqueLambert lambert:
-                            SetDc(cmat, lambert.diffuse);
-                            break;
-                    }
-                }
-                return cmat;
-            }
-            static void SetDc(Material material, common_color_or_texture_type obj)
-            {
-                if (obj == null) return;
-                if (obj.Item is common_color_or_texture_typeColor col)
-                {
-                    if(ParseHelpers.TryParseColor(col.Text, out var srgb))
-                        material.DiffuseColor = LinearColor.FromSrgb(srgb);
-                }
-                if (obj.Item is common_color_or_texture_typeTexture tex)
-                {
-                    material.DiffuseColor = LinearColor.White;
-                    material.DiffuseTexture = new TextureInfo(tex.texture, 0);
-                }
-            }
+            throw new ModelLoadException("XML parse failed", e);
         }
 
-        static Geometry GetGeometry(UpAxis up, geometry geo, MaterialAccessor matlib, ModelLoadContext ctx)
+        if (document.Root is not { Name.LocalName: "COLLADA" })
         {
-            var conv = new Geometry() {Attributes = VertexAttributes.Position};
-            conv.Name = string.IsNullOrEmpty(geo.name) ? geo.id : geo.name;
-            var msh = geo.Item as mesh;
-            if (msh == null) return null;
-            var vertices = new VertexBufferBuilder();
-            var indices = new List<uint>();
-            List<TriangleGroup> groups = new List<TriangleGroup>();
-            Dictionary<string, GeometrySource> sources = new Dictionary<string, GeometrySource>();
-            Dictionary<string, float[]> arrays = new Dictionary<string, float[]>();
-            Dictionary<string, GeometrySource> verticesRefs = new Dictionary<string, GeometrySource>();
-            
-            //Get arrays
-            foreach(var acc in msh.source) {
-                var arr = acc.Item as float_array;
-                arrays.Add(arr.id, ParseHelpers.FloatArray(arr.Text));
+            throw new ModelLoadException("Root node of XML is not COLLADA");
+        }
+
+        var root = document.Root!;
+
+        var upAxis = Enum.Parse<UpAxisType>(root.Child("asset")?.Child("up_axis")?.Value ?? "Y_UP", true);
+
+        var defSceneUri = root.Child("scene")?.Child("instance_visual_scene")?.Attribute("url")?.Value;
+        if (string.IsNullOrWhiteSpace(defSceneUri))
+            throw new ModelLoadException("Could not determine default scene");
+        var defSceneId = CheckURI(defSceneUri);
+        var defaultScene = root.Child("library_visual_scenes")?.IdLookup("visual_scene", defSceneId);
+        if (defaultScene == null)
+        {
+            throw new ModelLoadException($"Could not find default scene {defSceneId}");
+        }
+
+        var mdl = new Model() { Materials = new() };
+
+        var matAccess = new MaterialAccessor(mdl, root.Child("library_materials"), root.Child("library_effects"));
+        var geoAccess = new GeometryAccessor(mdl, ctx, upAxis, root.Child("library_geometries"), matAccess);
+
+        var roots = new List<ModelNode>();
+        foreach (var n in defaultScene.Elements().Where(x => x.Name.LocalName == "node"))
+        {
+            roots.Add(ProcessNode(upAxis, n, geoAccess));
+        }
+
+        mdl.Roots = roots.ToArray();
+        geoAccess.Set();
+
+        return mdl;
+    }
+    
+    static ModelNode ProcessNode(UpAxisType up, XElement n, GeometryAccessor geolib)
+    {
+        var obj = new ModelNode();
+        obj.Name = n.Attribute("name")?.Value ?? "node";
+        var gref = n.Child("instance_geometry");
+        if (gref != null)
+        {
+            var id = CheckURI(gref.Attribute("url")!.Value);
+            obj.Geometry = geolib.GetGeometry(id);
+        }
+
+        var mat = n.SidLookup("matrix", "transform");
+        if (mat != null)
+        {
+            obj.Transform = GetMatrix(up, mat.Value);
+        }
+
+        foreach (var node in n.Elements().Where(x => x.Name.LocalName == "node"))
+        {
+            obj.Children.Add(ProcessNode(up, node, geolib));
+        }
+        return obj;
+    }
+
+    static Matrix4x4 GetMatrix(UpAxisType ax, string text)
+    {
+        var floats = ParseHelpers.FloatArray(text);
+        Matrix4x4 mat;
+        if (floats.Length == 16)
+            mat = new Matrix4x4(
+                floats[0], floats[4], floats[8], floats[12],
+                floats[1], floats[5], floats[9], floats[13],
+                floats[2], floats[6], floats[10], floats[14],
+                floats[3], floats[7], floats[11], floats[15]
+            );
+        else if (floats.Length == 9)
+            mat = new Matrix4x4(
+                floats[0], floats[1], floats[2], 0,
+                floats[3], floats[4], floats[5], 0,
+                floats[6], floats[7], floats[8], 0,
+                0, 0, 0, 1
+            );
+        else
+            throw new Exception("Invalid Matrix: " + floats.Length + " elements");
+        return Transform.ToYUp((UpAxis)(int)ax, mat);
+    }
+
+    class GeometryAccessor(Model model, ModelLoadContext ctx, UpAxisType up, XElement geolib, MaterialAccessor matlib)
+    {
+        private Dictionary<string, Geometry> geometries = new();
+        public Geometry GetGeometry(string id)
+        {
+            if (!geometries.TryGetValue(id, out var g))
+            {
+                var src = geolib!.IdLookup("geometry", id)!;
+                g = ParseGeometry(up, src, matlib, ctx);
+                geometries[id] = g;
             }
-            //Accessors
-            foreach(var acc in msh.source) {
-                sources.Add(acc.id, new GeometrySource(acc, arrays));
+            return g;
+        }
+
+        public void Set()
+        {
+            model.Geometries = geometries.Values.ToArray();
+        }
+    }
+
+    class MaterialAccessor(Model model, XElement matlib, XElement fxlib)
+    {
+        public Material GetMaterial(string? id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) id = "DEFAULT";
+            var src = matlib?.IdLookup("material", "id");
+            var name = id;
+            if (src != null)
+                name = string.IsNullOrWhiteSpace(src.Attribute("name")?.Value) ? id : src.Attribute("name")!.Value;
+            if (!model.Materials.TryGetValue(name, out Material mat))
+            {
+                mat = ParseMaterial(src, name);
+                model.Materials.Add(name, mat);
             }
-            //Process geometry
-            foreach(var item in msh.Items) {
-                if(!(item is triangles || item is polylist || item is polygons || item is lines)) {
-                    ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+
+            return mat;
+        }
+
+        Material ParseMaterial(XElement src, string name)
+        {
+            var cmat = new Material() { Name = name, DiffuseColor = LinearColor.White };
+            if (matlib == null || fxlib == null || src == null) return cmat;
+            var instanceEffect = src.Child("instance_effect");
+            if (instanceEffect == null) return cmat;
+            var fx = fxlib.IdLookup("effect", CheckURI(instanceEffect.Attribute("url")!.Value));
+            if (fx != null)
+            {
+                var technique = fx.Child("profile_COMMON")?.SidLookup("technique", "common");
+                if (technique == null) return cmat;
+                var fxp = technique.Elements().FirstOrDefault(x =>
+                    x.Name.LocalName == "phong" || x.Name.LocalName == "blinn" || x.Name.LocalName == "lambert");
+                var diffuse = fxp?.Child("diffuse");
+                if (diffuse != null)
+                {
+                    SetDc(cmat, diffuse);
                 }
             }
 
-            GeometryKind kind = GeometryKind.Triangles;
-            bool set = false;
-            foreach(var item in msh.Items.Where(x => x is triangles || x is polylist || x is polygons || x is lines)) {
-                InputLocalOffset[] inputs;
-                int[] pRefs;
-                int indexCount;
-                string materialRef;
-                Material material;
-                if(item is triangles triangles) {
-                    indexCount = (int)(triangles.count * 3);
-                    pRefs = ParseHelpers.IntArray(triangles.p);
-                    inputs = triangles.input;
-                    materialRef = triangles.material;
+            return cmat;
+        }
+
+        static void SetDc(Material material, XElement obj)
+        {
+            if (obj == null) return;
+            if (obj.Name.LocalName == "color")
+            {
+                if (ParseHelpers.TryParseColor(obj.Value!, out var srgb))
+                    material.DiffuseColor = LinearColor.FromSrgb(srgb);
+            }
+            // Don't support textures.
+        }
+    }
+
+    const string SEM_VERTEX = "VERTEX";
+    const string SEM_POSITION = "POSITION";
+    const string SEM_COLOR = "COLOR";
+    const string SEM_NORMAL = "NORMAL";
+    const string SEM_TEXCOORD = "TEXCOORD";
+
+    static IEnumerable<XElement> GetFloatArrays(XElement geo)
+    {
+        foreach (var s in geo.Elements().Where(x => x.Name.LocalName == "source"))
+        {
+            foreach (var a in s.Elements().Where(x => x.Name.LocalName == "float_array"))
+            {
+                yield return a;
+            }
+        }
+    }
+
+    record struct Input(string Semantic, string SourceUrl, int Offset, int Set);
+
+    static Input[] GetInputs(XElement geo)
+    {
+        var l = new List<Input>();
+        foreach (var input in geo.Elements().Where(x => x.Name.LocalName == "input"))
+        {
+            l.Add(new Input(
+                input.Attribute("semantic")!.Value,
+                input.Attribute("source")!.Value,
+                input.IntAttribute("offset"),
+                input.IntAttribute("set")));
+        }
+        return l.ToArray();
+    }
+
+    static (string? materialRef, Input[] inputs, int count) GetShapeInfo(XElement geo)
+    {
+        var material = geo.Attribute("material")?.Value;
+        int count = geo.IntAttribute("count");
+        return (material, GetInputs(geo), count);
+    }
+
+    static int[] GetPRefs(XElement elem) => ParseHelpers.IntArray(elem.Child("p")!.Value);
+
+    static Geometry ParseGeometry(UpAxisType up, XElement geo,  MaterialAccessor matlib, ModelLoadContext ctx)
+    {
+        var conv = new Geometry();
+        conv.Name = string.IsNullOrEmpty(geo.Attribute("name")?.Value)
+            ? geo.Attribute("id")!.Value
+            : geo.Attribute("name")!.Value;
+
+        var vertices = new VertexBufferBuilder();
+        var indices = new List<uint>();
+        List<TriangleGroup> groups = new List<TriangleGroup>();
+
+        Dictionary<string, float[]> arrays = new();
+        Dictionary<string, GeometrySource> sources = new();
+
+        var mesh = geo.Child("mesh");
+        if (mesh == null)
+            return null;
+
+        foreach (var arr in GetFloatArrays(mesh))
+        {
+            var id = arr.Attribute("id")!.Value!;
+            arrays[id] = ParseHelpers.FloatArray(arr.Value);
+        }
+
+        foreach (var s in mesh.Elements().Where(x => x.Name.LocalName == "source"))
+        {
+            var src = new GeometrySource(s, arrays);
+            sources[src.Id] = src;
+        }
+
+        XElement[] polys = mesh.Elements().Where(x =>
+            x.Name.LocalName == "triangles" ||
+            x.Name.LocalName == "polylist" ||
+            x.Name.LocalName == "polygons" ||
+            x.Name.LocalName == "lines").ToArray();
+
+        var verticesElem = mesh.Child("vertices");
+        var verticesId = verticesElem?.Attribute("id")?.Value;
+        Input[] verticesInput = verticesElem != null
+            ? GetInputs(verticesElem)
+            : [];
+
+        GeometryKind kind = GeometryKind.Triangles;
+        bool set = false;
+
+        foreach (var elem in polys)
+        {
+            var (materialRef, inputs, indexCount) = GetShapeInfo(elem);
+            int[] pRefs;
+            switch (elem.Name.LocalName)
+            {
+                case "triangles":
                     if (set && kind != GeometryKind.Triangles)
                     {
-                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        ctx.Warn("Collada", $"Ignoring {elem.Name.LocalName} element.");
                         continue;
                     }
-                } 
-                else if (item is polygons polygons)
-                {
-                    indexCount = (int)(polygons.count * 3);
-                    int j = 0;
-                    pRefs = new int[indexCount];
-                    foreach (var arr in polygons.Items)
-                    {
-                        if(!(arr is string)) throw new ModelLoadException("Polygons: ph element unsupported");
-                        var ints = ParseHelpers.IntArray((string) arr);
-                        if (ints.Length != 3)
-                            throw new ModelLoadException("Polygons: non-triangle geometry not supported");
-                        pRefs[j] = ints[0];
-                        pRefs[j + 1] = ints[1];
-                        pRefs[j + 2] = ints[2];
-                        j += 3;
-                    }
-                    inputs = polygons.input;
-                    materialRef = polygons.material;
+
+                    indexCount *= 3;
+                    pRefs = GetPRefs(elem);
+                    break;
+                case "polylist":
                     if (set && kind != GeometryKind.Triangles)
                     {
-                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        ctx.Warn("Collada", $"Ignoring {elem.Name.LocalName} element.");
                         continue;
                     }
-                } else if(item is lines lines) {
-                    indexCount = (int)(lines.count * 2);
-                    pRefs = ParseHelpers.IntArray(lines.p);
-                    inputs = lines.input;
-                    materialRef = lines.material;
+
+                    if (ParseHelpers.IntArray(elem.Child("vcount")!.Value).Any(x => x != 3))
+                    {
+                        throw new ModelLoadException("Polylist: non-triangle geometry");
+                    }
+
+                    pRefs = GetPRefs(elem);
+                    indexCount *= 3;
+                    break;
+                case "polygons":
+                    if (set && kind != GeometryKind.Triangles)
+                    {
+                        ctx.Warn("Collada", $"Ignoring {elem.Name.LocalName} element.");
+                        continue;
+                    }
+
+                    throw new NotImplementedException("polygons");
+                case "lines":
                     if (set && kind != GeometryKind.Lines)
                     {
-                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
+                        ctx.Warn("Collada", $"Ignoring {elem.Name.LocalName} element.");
                         continue;
                     }
+
                     kind = GeometryKind.Lines;
-                } else  {
-                    var plist = (polylist)item;
-                    pRefs = ParseHelpers.IntArray(plist.p);
-                    foreach(var c in ParseHelpers.IntArray(plist.vcount)) {
-                        if(c != 3) {
-                            throw new ModelLoadException("Polylist: non-triangle geometry");
+                    indexCount *= 2;
+                    pRefs = GetPRefs(elem);
+                    break;
+                default:
+                    throw new InvalidOperationException();
+            }
+
+            if (indexCount == 0) continue; //Skip empty
+            set = true;
+            var material = matlib.GetMaterial(materialRef);
+            int pStride = 0;
+            foreach (var input in inputs)
+                pStride = Math.Max((int)input.Offset, pStride);
+            pStride++;
+            GeometrySource sourceXYZ = null;
+            int offXYZ = int.MinValue;
+            GeometrySource sourceNORMAL = null;
+            int offNORMAL = int.MinValue;
+            GeometrySource sourceCOLOR = null;
+            int offCOLOR = int.MinValue;
+            GeometrySource sourceUV1 = null;
+            int offUV1 = int.MinValue;
+            GeometrySource sourceUV2 = null;
+            int offUV2 = int.MinValue;
+            int texCount = 0;
+            int startIdx = indices.Count;
+            foreach (var input in inputs)
+            {
+                switch (input.Semantic)
+                {
+                    case SEM_VERTEX:
+                        if (CheckURI(input.SourceUrl) != verticesId)
+                            throw new ModelLoadException("VERTEX doesn't match mesh vertices");
+                        foreach (var ip2 in verticesInput)
+                        {
+                            switch (ip2.Semantic)
+                            {
+                                case SEM_POSITION:
+                                    offXYZ = (int)input.Offset;
+                                    sourceXYZ = sources[CheckURI(ip2.SourceUrl)];
+                                    break;
+                                case SEM_NORMAL:
+                                    offNORMAL = (int)input.Offset;
+                                    sourceNORMAL = sources[CheckURI(ip2.SourceUrl)];
+                                    conv.Attributes |= VertexAttributes.Normal;
+                                    break;
+                                case SEM_COLOR:
+                                    offCOLOR = (int)input.Offset;
+                                    sourceCOLOR = sources[CheckURI(ip2.SourceUrl)];
+                                    conv.Attributes |= VertexAttributes.Diffuse;
+                                    break;
+                                case SEM_TEXCOORD:
+                                    if (texCount == 2)
+                                        throw new ModelLoadException("Too many texcoords! (Max supported: 2)");
+                                    if (texCount == 1)
+                                    {
+                                        offUV2 = (int)input.Offset;
+                                        sourceUV2 = sources[CheckURI(ip2.SourceUrl)];
+                                        conv.Attributes |= VertexAttributes.Texture2;
+                                    }
+                                    else
+                                    {
+                                        offUV1 = (int)input.Offset;
+                                        sourceUV1 = sources[CheckURI(ip2.SourceUrl)];
+                                        conv.Attributes |= VertexAttributes.Texture1;
+                                    }
+
+                                    texCount++;
+                                    break;
+                            }
                         }
-                    }
-                    materialRef = plist.material;
-                    inputs = plist.input;
-                    indexCount = (int)(plist.count * 3);
-                    if (set && kind != GeometryKind.Triangles)
-                    {
-                        ctx.Warn("Collada", "Ignoring " + item.GetType().Name + " element.");
-                        continue;
-                    }
+
+                        break;
+                    case SEM_POSITION:
+                        offXYZ = (int)input.Offset;
+                        sourceXYZ = sources[CheckURI(input.SourceUrl)];
+                        break;
+                    case SEM_NORMAL:
+                        offNORMAL = (int)input.Offset;
+                        sourceNORMAL = sources[CheckURI(input.SourceUrl)];
+                        conv.Attributes |= VertexAttributes.Normal;
+                        break;
+                    case SEM_COLOR:
+                        offCOLOR = (int)input.Offset;
+                        sourceCOLOR = sources[CheckURI(input.SourceUrl)];
+                        conv.Attributes |= VertexAttributes.Diffuse;
+                        break;
+                    case SEM_TEXCOORD:
+                        if (texCount == 2) throw new Exception("Too many texcoords!");
+                        if (texCount == 1)
+                        {
+                            offUV2 = (int)input.Offset;
+                            sourceUV2 = sources[CheckURI(input.SourceUrl)];
+                            conv.Attributes |= VertexAttributes.Texture2;
+                        }
+                        else
+                        {
+                            offUV1 = (int)input.Offset;
+                            sourceUV1 = sources[CheckURI(input.SourceUrl)];
+                            conv.Attributes |= VertexAttributes.Texture1;
+                        }
+
+                        texCount++;
+                        break;
                 }
-                if (indexCount == 0) continue; //Skip empty
-                set = true;
-                material = matlib.GetMaterial(materialRef);
-                int pStride = 0;
-                foreach (var input in inputs)
-                    pStride = Math.Max((int)input.offset, pStride);
-                pStride++;
-                GeometrySource sourceXYZ = null; int offXYZ = int.MinValue;
-                GeometrySource sourceNORMAL = null; int offNORMAL = int.MinValue;
-                GeometrySource sourceCOLOR = null; int offCOLOR = int.MinValue;
-                GeometrySource sourceUV1 = null; int offUV1 = int.MinValue;
-                GeometrySource sourceUV2 = null; int offUV2 = int.MinValue;
-                int texCount = 0;
-                int startIdx = indices.Count;
-                foreach(var input in inputs) {
-                    switch(input.semantic) {
-                        case SEM_VERTEX:
-                            if (CheckURI(input.source) != msh.vertices.id)
-                                throw new ModelLoadException("VERTEX doesn't match mesh vertices");
-                            foreach(var ip2 in msh.vertices.input) {
-                                switch(ip2.semantic) {
-                                    case SEM_POSITION:
-                                        offXYZ = (int)input.offset;
-                                        sourceXYZ = sources[CheckURI(ip2.source)];
-                                        break;
-                                    case SEM_NORMAL:
-                                        offNORMAL = (int)input.offset;
-                                        sourceNORMAL = sources[CheckURI(ip2.source)];
-                                        conv.Attributes |= VertexAttributes.Normal;
-                                        break;
-                                    case SEM_COLOR:
-                                        offCOLOR = (int)input.offset;
-                                        sourceCOLOR = sources[CheckURI(ip2.source)];
-                                        conv.Attributes |= VertexAttributes.Diffuse;
-                                        break;
-                                    case SEM_TEXCOORD:
-                                        if (texCount == 2) throw new ModelLoadException("Too many texcoords! (Max supported: 2)");
-                                        if (texCount == 1)
-                                        {
-                                            offUV2 = (int)input.offset;
-                                            sourceUV2 = sources[CheckURI(ip2.source)];
-                                            conv.Attributes |= VertexAttributes.Texture2;
-                                        }
-                                        else
-                                        {
-                                            offUV1 = (int)input.offset;
-                                            sourceUV1 = sources[CheckURI(ip2.source)];
-                                            conv.Attributes |= VertexAttributes.Texture1;
-                                        }
-                                        texCount++;
-                                        break;
-                                }
-                            }
-                            break;
-                        case SEM_POSITION:
-                            offXYZ = (int)input.offset;
-                            sourceXYZ = sources[CheckURI(input.source)];
-                            break;
-                        case SEM_NORMAL:
-                            offNORMAL = (int)input.offset;
-                            sourceNORMAL = sources[CheckURI(input.source)];
-                            conv.Attributes |= VertexAttributes.Normal;
-                            break;
-                        case SEM_COLOR:
-                            offCOLOR = (int)input.offset;
-                            sourceCOLOR = sources[CheckURI(input.source)];
-                            conv.Attributes |= VertexAttributes.Diffuse;
-                            break;
-                        case SEM_TEXCOORD:
-                            if (texCount == 2) throw new Exception("Too many texcoords!");
-                            if(texCount == 1) {
-                                offUV2 = (int)input.offset;
-                                sourceUV2 = sources[CheckURI(input.source)];
-                                conv.Attributes |= VertexAttributes.Texture2;
-                            } else {
-                                offUV1 = (int)input.offset;
-                                sourceUV1 = sources[CheckURI(input.source)];
-                                conv.Attributes |= VertexAttributes.Texture1;
-                            }
-                            texCount++;
-                            break;
-                    }
-                }
-                for (int i = 0; i <  indexCount; i++) {
-                    int idx = i * pStride;
-                    var vert = new Vertex(
-                        Transform.ToYUp(up, sourceXYZ.GetXYZ(pRefs[idx + offXYZ])),
-                        offNORMAL == int.MinValue ? Vector3.Zero : Transform.ToYUp(up, sourceNORMAL.GetXYZ(pRefs[idx + offNORMAL])),
-                        offCOLOR == int.MinValue ? LinearColor.White : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]),
-                        Vector4.Zero,
-                        offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]),
-                        offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2]),
-                        Vector2.Zero,
-                        Vector2.Zero
-                    );
-                    indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
-                }
-                groups.Add(new TriangleGroup() { 
-                    StartIndex = startIdx,
-                    BaseVertex = vertices.BaseVertex,
-                    IndexCount = indices.Count - startIdx,
-                    Material = material
-                });
-                vertices.Chunk();
             }
-            conv.Kind = kind;
-            conv.Vertices = vertices.Vertices.ToArray();
-            conv.Indices = Indices.FromBuffer(indices.ToArray());
-            conv.Groups = groups.ToArray();
-            return conv;
+
+            for (int i = 0; i < indexCount; i++)
+            {
+                int idx = i * pStride;
+                if (idx >= pRefs.Length)
+                {
+                    Console.WriteLine();
+                }
+                var pos = Transform.ToYUp((UpAxis)(int)up, sourceXYZ.GetXYZ(pRefs[idx + offXYZ]));
+                var normal = offNORMAL == int.MinValue
+                    ? Vector3.Zero
+                    : Transform.ToYUp((UpAxis)(int)up, sourceNORMAL.GetXYZ(pRefs[idx + offNORMAL]));
+                var color = offCOLOR == int.MinValue ? LinearColor.White : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]);
+                var uv1 = offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]);
+                var uv2 = offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2]);
+                var vert = new Vertex(pos, normal, color, Vector4.Zero, uv1,uv2, Vector2.Zero, Vector2.Zero);
+                indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
+            }
+
+            groups.Add(new TriangleGroup()
+            {
+                StartIndex = startIdx,
+                BaseVertex = vertices.BaseVertex,
+                IndexCount = indices.Count - startIdx,
+                Material = material
+            });
+            vertices.Chunk();
         }
-        
-        class GeometrySource
+
+        conv.Kind = kind;
+        conv.Vertices = vertices.Vertices.ToArray();
+        conv.Indices = Indices.FromBuffer(indices.ToArray());
+        conv.Groups = groups.ToArray();
+        return conv;
+    }
+
+
+    class GeometrySource
+    {
+        float[] array;
+        int stride;
+        int offset;
+        public int Count { get; private set; }
+        public string Id { get; private set; }
+
+        public GeometrySource(XElement src, Dictionary<string, float[]> arrays)
         {
-            float[] array;
-            int stride;
-            int offset;
-            public int Count { get; private set; }
-            public GeometrySource(source src, Dictionary<string, float[]> arrays)
-            {
-                var acc = src.technique_common.accessor;
-                array = arrays[CheckURI(acc.source)];
-                stride = (int)acc.stride;
-                offset = (int)acc.offset;
-                Count = (int)acc.count;
-            }
-            public LinearColor GetColor(int index)
-            {
-                var i = offset + (index * stride);
-                if (stride == 4)
-                    return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], array[i + 3]);
-                else if (stride == 3)
-                    return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], 1);
-                else
-                    throw new Exception("Color Unhandled stride " + stride);
-            }
-            public Vector3 GetXYZ(int index)
-            {
-                if (stride != 3) throw new Exception("Vec3 Unhandled stride " + stride);
-                var i = offset + (index * stride);
-                return new Vector3(
-                    array[i],
-                    array[i + 1],
-                    array[i + 2]
-                );
-            }
-            public Vector2 GetUV(int index)
-            {
-                if (stride != 2) throw new Exception("Vec2 Unhandled stride " + stride);
-                var i = offset + (index * stride);
-                return new Vector2(
-                    array[i],
-                    1 - array[i + 1]
-                );
-            }
+            Id = src.Attribute("id")!.Value!;
+            var acc = src.Child("technique_common")?.Child("accessor");
+            array = arrays[CheckURI(acc.Attribute("source")?.Value)];
+            stride = acc.IntAttribute("stride", 1);
+            offset = acc.IntAttribute("offset");
+            Count = acc.IntAttribute("count");
         }
-        static string CheckURI(string s)
+
+        public LinearColor GetColor(int index)
         {
-            if (s[0] != '#') throw new ModelLoadException("Don't support external dae refs");
-            return s.Substring(1);
+            var i = offset + (index * stride);
+            if (stride == 4)
+                return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], array[i + 3]);
+            else if (stride == 3)
+                return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], 1);
+            else
+                throw new Exception("Color Unhandled stride " + stride);
         }
+
+        public Vector3 GetXYZ(int index)
+        {
+            if (stride != 3) throw new Exception("Vec3 Unhandled stride " + stride);
+            var i = offset + (index * stride);
+            return new Vector3(
+                array[i],
+                array[i + 1],
+                array[i + 2]
+            );
+        }
+
+        public Vector2 GetUV(int index)
+        {
+            if (stride != 2) throw new Exception("Vec2 Unhandled stride " + stride);
+            var i = offset + (index * stride);
+            return new Vector2(
+                array[i],
+                1 - array[i + 1]
+            );
+        }
+    }
+
+    static string CheckURI(string s)
+    {
+        if (s[0] != '#') throw new ModelLoadException("External references in COLLADA are not supported");
+        return s.Substring(1);
+    }
+}
+
+static class XExtensions
+{
+    public static XElement? IdLookup(this XElement e, string name, string id)
+        => e.Elements().FirstOrDefault(x => x.Name.LocalName == name &&
+                                               x.Attribute("id")?.Value == id);
+
+    public static XElement? SidLookup(this XElement e, string name, string id)
+        => e.Elements().FirstOrDefault(x => x.Name.LocalName == name &&
+                                               x.Attribute("sid")?.Value == id);
+    public static XElement? Child(this XElement e, string name)
+        => e.Elements().FirstOrDefault(x => x.Name.LocalName == name);
+
+    public static int IntAttribute(this XElement e, string name, int def = 0)
+    {
+        var x = e.Attribute(name);
+        if (x == null) return def;
+        return int.Parse(x.Value);
     }
 }

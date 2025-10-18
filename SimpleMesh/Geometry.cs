@@ -67,6 +67,9 @@ namespace SimpleMesh
             UserTag = UserTag
         };
 
+        internal bool Has(VertexAttributes attributes) =>
+            (Attributes & attributes) == attributes;
+
 
         int GetIndex(int iFace, int iVert)
         {
