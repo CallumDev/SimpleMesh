@@ -84,31 +84,40 @@ public class Hull
     
     static bool BuildQH(Quickhull.QuickhullCS qh, out Vector3[] newVertices, out int[] newIndices)
     {
-        qh.Build();
-        var idx = qh.CollectFaces();
-        var verts = new List<Vector3>();
-        var indices = new List<int>();
-        foreach (var i in idx)
+        try
         {
-            var v = qh.Vertices[i].Point;
-            var x = verts.IndexOf(v);
-            if (x == -1)
+            qh.Build();
+            var idx = qh.CollectFaces();
+            var verts = new List<Vector3>();
+            var indices = new List<int>();
+            foreach (var i in idx)
             {
-                indices.Add(verts.Count);
-                verts.Add(v);
+                var v = qh.Vertices[i].Point;
+                var x = verts.IndexOf(v);
+                if (x == -1)
+                {
+                    indices.Add(verts.Count);
+                    verts.Add(v);
+                }
+                else
+                {
+                    indices.Add(x);
+                }
+            }
+            newVertices = verts.ToArray();
+            newIndices = indices.ToArray();
+            if (Quickhull.QuickhullCS.Verify(newVertices, newIndices))
+            {
+                return true;
             }
             else
             {
-                indices.Add(x);
+                newVertices = null;
+                newIndices = null;
+                return false;
             }
         }
-        newVertices = verts.ToArray();
-        newIndices = indices.ToArray();
-        if (Quickhull.QuickhullCS.Verify(newVertices, newIndices))
-        {
-            return true;
-        }
-        else
+        catch (Exception e)
         {
             newVertices = null;
             newIndices = null;
