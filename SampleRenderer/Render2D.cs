@@ -1,11 +1,8 @@
-using System;
-using OpenTK.Mathematics;
 using System.Runtime.InteropServices;
 using OpenTK.Graphics.OpenGL;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using OpenTK.Mathematics;
 
-namespace SampleOpenTK
+namespace SampleRenderer
 {
     public class Render2D
     {
@@ -57,7 +54,7 @@ void main()
         public unsafe Render2D()
         {
             //load texture
-            using var stream = typeof(Render2D).Assembly.GetManifestResourceStream("SampleOpenTK.SampleRenderer.LiberationSans_0.png");
+            using var stream = typeof(Render2D).Assembly.GetManifestResourceStream("SampleRenderer.LiberationSans_0.png");
             texture = Texture.Load(stream);
             shader = new Shader(VERTEX, FRAGMENT);
             shader.SetI("texture", 0);

@@ -1,1 +1,1 @@
-{ "convex":  false, "file":  "torus.obj" }
+{ "kind": "Concave", "file": "torus.obj" }

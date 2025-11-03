@@ -19,23 +19,23 @@ public enum AppliedRepairs
 
 public class Hull
 {
-    
     private Vector3[] vertices;
     private int[] indices;
-    public IReadOnlyList<Vector3> Vertices => vertices;
-    public IReadOnlyList<int> Indices => indices;
+    
+    public ReadOnlySpan<Vector3> Vertices => vertices;
+    public ReadOnlySpan<int> Indices => indices;
     
     public int FaceCount => indices.Length / 3;
     
-    public bool IsConvex { get; private set; }
-
-    public bool IsWatertight { get; private set; }
-    
-    public bool Multibody { get; private set; }
-
-    public bool DegenerateMesh { get; private set; }
+    public HullKind Kind { get; private set; }
 
     public AppliedRepairs Repairs { get; private set; }
+    
+    public Vector3 Min { get; private set; }
+    
+    public Vector3 Max { get; private set; }
+    
+    public float Volume { get; private set; }
 
     public Point3<int> GetFace(int faceIndex)
     {
@@ -127,7 +127,7 @@ public class Hull
     
     public bool MakeConvex(bool force = false)
     {
-        if (IsConvex && !force)
+        if (Kind == HullKind.Convex && !force)
             return true;
         var qh = new Quickhull.QuickhullCS(vertices);
         if (BuildQH(qh, out var nV, out var nI))
@@ -154,7 +154,8 @@ public class Hull
     
     static int GetMergedIndex(Vector3 item, IList<Vector3> vecs)
     {
-        for (int i = 0; i < vecs.Count; i++) {
+        for (int i = 0; i < vecs.Count; i++) 
+        {        
             if (Math.Abs(vecs[i].X - item.X) < MergeThreshold &&
                 Math.Abs(vecs[i].Y - item.Y) < MergeThreshold &&
                 Math.Abs(vecs[i].Z - item.Z) < MergeThreshold)
@@ -170,21 +171,29 @@ public class Hull
         if (geometry.Kind != GeometryKind.Triangles) {
             throw new InvalidOperationException("Geometry must be triangles");
         }
-        List<Vector3> vertexArray = new List<Vector3>();
+
+        List<Vector3> vertexArray = new();
         List<int> indexArray = new List<int>();
 
-        for (int i = 0; i < geometry.Indices.Length; i++)
+        for (int i = 0; i < geometry.Groups.Length; i++)
         {
-            var srcIndex = geometry.Indices.Indices32 != null
-                ? geometry.Indices.Indices32[i]
-                : geometry.Indices.Indices16[i];
-            var idx = GetMergedIndex(geometry.Vertices[srcIndex].Position, vertexArray);
-            if (idx == -1) {
-                indexArray.Add(vertexArray.Count);
-                vertexArray.Add(geometry.Vertices[srcIndex].Position);
-            }
-            else {
-                indexArray.Add(idx);
+            for (int j = 0; j < geometry.Groups[i].IndexCount; j++)
+            {
+                var srcIndex = geometry.Indices.Indices32 != null
+                    ? geometry.Indices.Indices32[geometry.Groups[i].StartIndex + j]
+                    : geometry.Indices.Indices16[geometry.Groups[i].StartIndex + j];
+                var idx = (int)(geometry.Groups[i].BaseVertex + srcIndex);
+
+                var merged = GetMergedIndex(geometry.Vertices[idx].Position, vertexArray);
+                if (merged == -1) 
+                {
+                    indexArray.Add(vertexArray.Count);
+                    vertexArray.Add(geometry.Vertices[idx].Position);
+                }
+                else {
+                    indexArray.Add(merged);
+                }
+
             }
         }
         return CreateInternal(vertexArray.ToArray(), indexArray.ToArray());
@@ -301,24 +310,26 @@ public class Hull
         var scale = (max - min).Length();
         if (scale < ZeroArea)
             scale = 1.0f;
+        Min = min;
+        Max = max;
         // Get edges and faces
         var faces = MemoryMarshal.Cast<int, Point3<int>>(indices);
         var edges = Edge.ArrayFromFaces(faces, out var edgeFaces);
         var edgesSorted = edges.Select(x => x.Sorted()).ToArray();
         var groups = DuplicatePairIndices(edgesSorted);
         
-        IsWatertight = groups.Length * 2 == edges.Length;
 
-        if (!IsWatertight) {
-            IsConvex = false;
+        if (groups.Length * 2 != edges.Length)
+        {
+            Kind = HullKind.NonWatertight;
             return;
         }
         
         if (!IsWindingConsistent(edges, groups))
         {
-            if (!FixNormals(edgesSorted, edgeFaces, groups))  {
-                Multibody = true;
-                IsConvex = false;
+            if (!FixNormals(edgesSorted, edgeFaces, groups))
+            {
+                Kind = HullKind.Multibody;
                 return;
             }
             // Reset arrays
@@ -350,18 +361,18 @@ public class Hull
                          > ZeroArea;
         }
 
-        if (!nonzero.HasAnySet()) {
-            IsConvex = false;
-            DegenerateMesh = true;
+        if (!nonzero.HasAnySet())
+        {
+            Kind = HullKind.Degenerate;
             return;
         }
 
         var (adjacency, adjacencyEdges) = CalculateAdjacency(edgesSorted, edgeFaces, groups);
 
         // Check if the mesh is multiple bodies
-        if (Graph.FromEdgelist(adjacency).ConnectedComponents().Count > 1) {
-            Multibody = true;
-            IsConvex = false;
+        if (Graph.FromEdgelist(adjacency).ConnectedComponents().Count > 1)
+        {
+            Kind = HullKind.Multibody;
             return;
         }
         
@@ -370,16 +381,17 @@ public class Hull
             adj_ok[i] = nonzero[adjacency[i].A] && nonzero[adjacency[i].B];
         }
 
-        if (!adj_ok.HasAnySet()) {
-            IsConvex = false;
-            DegenerateMesh = true;
+        if (!adj_ok.HasAnySet())
+        {
+            Kind = HullKind.Degenerate;
             return;
         }
-        
+
+        Volume = CalculateVolume();
         // project faces
         var unshared = AdjacencyUnshared(adjacency, adjacencyEdges, faces);
 
-        IsConvex = true;
+        Kind = HullKind.Convex;
         for (int i = 0; i < adjacencyEdges.Length; i++)
         {
             var normal = FaceNormal(adjacency[i].A);
@@ -389,7 +401,7 @@ public class Hull
             var d = Vector3.Dot(other, normal);
             if (d > Planar * scale)
             {
-                IsConvex = false;
+                Kind = HullKind.Concave;
                 break;
             }
         }

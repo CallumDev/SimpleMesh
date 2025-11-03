@@ -1,8 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -14,16 +16,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="OpenTK" Version="4.9.4" />
-    </ItemGroup>
-
-    <ItemGroup>
       <ProjectReference Include="..\SampleRenderer\SampleRenderer.csproj" />
       <ProjectReference Include="..\SimpleMesh\SimpleMesh.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Remove="LiberationSans_0.png" />
     </ItemGroup>
 
 </Project>

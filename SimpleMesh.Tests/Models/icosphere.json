@@ -1,1 +1,1 @@
-{ "convex":  true, "file":  "icosphere.obj" }
+{ "kind": "Convex", "file": "icosphere.obj" }

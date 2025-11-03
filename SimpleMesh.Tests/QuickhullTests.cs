@@ -73,13 +73,12 @@ public class QuickhullTests
     {
         var input = ReadTestHull(test);
         Assert.True(Hull.TryQuickhull(input, out var result));
-        Assert.True(result.IsWatertight);
-        Assert.True(result.IsConvex);
+        Assert.Equal(HullKind.Convex, result.Kind);
         Assert.Equal(AppliedRepairs.None, result.Repairs);
         if (File.Exists(Path.ChangeExtension(test, ".txt")))
         {
             var count = int.Parse(File.ReadAllText(Path.ChangeExtension(test, ".txt")).Trim());
-            Assert.Equal(count, result.Indices.Count);
+            Assert.Equal(count, result.Indices.Length);
         }
     }
 }

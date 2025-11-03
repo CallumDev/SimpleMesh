@@ -1,10 +1,8 @@
-using System;
-using System.IO;
 using OpenTK.Graphics.OpenGL;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace SampleOpenTK;
+namespace SampleRenderer;
 
 public static class Texture
 {

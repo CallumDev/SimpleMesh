@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleOpenTK", "SampleOpenT
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleMesh.Tests", "SimpleMesh.Tests\SimpleMesh.Tests.csproj", "{6C52832A-55A3-4071-8C77-87CA67483DAD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleRenderer", "SampleRenderer\SampleRenderer.csproj", "{28EF9D34-7E46-472D-8A63-91E143A09E5E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConvexHullSample", "ConvexHullSample\ConvexHullSample.csproj", "{6846C8C2-1C7C-4B8D-A77C-9B2BB8EB1CCE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +28,13 @@ Global
 		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6C52832A-55A3-4071-8C77-87CA67483DAD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28EF9D34-7E46-472D-8A63-91E143A09E5E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28EF9D34-7E46-472D-8A63-91E143A09E5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28EF9D34-7E46-472D-8A63-91E143A09E5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28EF9D34-7E46-472D-8A63-91E143A09E5E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6846C8C2-1C7C-4B8D-A77C-9B2BB8EB1CCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6846C8C2-1C7C-4B8D-A77C-9B2BB8EB1CCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6846C8C2-1C7C-4B8D-A77C-9B2BB8EB1CCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6846C8C2-1C7C-4B8D-A77C-9B2BB8EB1CCE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -12,6 +12,7 @@ using Vector2i = OpenTK.Mathematics.Vector2i;
 using Color4 = OpenTK.Mathematics.Color4;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using SampleRenderer;
 using SimpleMesh;
 using Vector3 = OpenTK.Mathematics.Vector3;
 
@@ -25,21 +26,7 @@ namespace SampleOpenTK
         }
 
         //Handle Input
-        class Button
-        {
-            public string Text;
-            public int X;
-            public int Y;
-            public Action Clicked;
 
-            public Button(string text, int x, int y, Action clicked)
-            {
-                Text = text;
-                X = x;
-                Y = y;
-                Clicked = clicked;
-            }
-        }
         private List<Button> buttons = new List<Button>();
         
         private Shader diffuseShader;
@@ -122,34 +109,14 @@ namespace SampleOpenTK
         private Button down = null;
         protected override void OnMouseDown(MouseButtonEventArgs e)
         {
-            if (e.Button != MouseButton.Left) return;
-            down = null;
-            foreach (var b in buttons)
-            {
-                var bSz = text.MeasureString(b.Text) + new Vector2i(4, 4);
-                var rect = new Rectangle(b.X, b.Y, bSz.X, bSz.Y);
-                if (rect.Contains((int) MousePosition.X, (int) MousePosition.Y))
-                {
-                    down = b;
-                    break;
-                }
-            }
+            foreach(var b in buttons)
+                b.OnMouseDown(e, MousePosition, text);
         }
         
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
-            if (e.Button != MouseButton.Left) return;
-            foreach (var b in buttons)
-            {
-                var bSz = text.MeasureString(b.Text) + new Vector2i(4, 4);
-                var rect = new Rectangle(b.X, b.Y, bSz.X, bSz.Y);
-                if (rect.Contains((int) MousePosition.X, (int) MousePosition.Y))
-                {
-                    if (down == b) b.Clicked();
-                    down = null;
-                    break;
-                }
-            }
+            foreach(var b in buttons)
+                b.OnMouseUp(e, MousePosition, text);
             base.OnMouseUp(e);
         }
 
@@ -466,6 +433,7 @@ namespace SampleOpenTK
                 var lp = new Vector3(0.0f, -10.0f, -1000.0f * mscale);
                 diffuseShader.Set("viewprojection", vp);
                 diffuseShader.Set("light_direction", -0.49999f, 0.707107f, 0.5f);
+
                 pbrShader.Set("viewprojection", vp);
                 pbrShader.Set("light_direction", 0.0f, 0.5f, -0.5f);
                 pbrShader.Set("camera_pos", campos.X, campos.Y, campos.Z);
@@ -481,9 +449,7 @@ namespace SampleOpenTK
             text.Start(sz.X, sz.Y);
             foreach (var b in buttons)
             {
-                var bSz = text.MeasureString(b.Text) + new Vector2i(4, 4);
-                text.FillBackground(b.X, b.Y, bSz.X, bSz.Y);
-                text.DrawString(b.Text, b.X + 2, b.Y + 2);
+                b.Render(text);
             }
             text.DrawString("Mouse Wheel - Zoom, Keyboard Up/Down/Left/Right - Rotate", 5, sz.Y - 60);
             if(openfile != null)

@@ -1,4 +1,4 @@
-namespace SampleOpenTK
+namespace SampleRenderer
 {
     public struct Rectangle
     {

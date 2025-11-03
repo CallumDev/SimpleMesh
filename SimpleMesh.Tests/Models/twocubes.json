@@ -1,1 +1,1 @@
-{ "convex":  false, "multibody": true, "file":  "twocubes.obj" }
+{ "kind": "Multibody", "file": "twocubes.obj" }

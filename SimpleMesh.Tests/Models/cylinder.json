@@ -1,1 +1,1 @@
-{ "convex":  true, "file":  "cylinder.glb" }
+{ "kind": "Convex", "file": "cylinder.glb" }

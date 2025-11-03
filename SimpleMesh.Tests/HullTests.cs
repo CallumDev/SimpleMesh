@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SimpleMesh.Convex;
 
 namespace SimpleMesh.Tests;
@@ -17,20 +18,19 @@ public class HullTests
     {
         // Watertight
         var x = LoadShape("Models/cube.obj");
-        Assert.True(Hull.FromGeometry(x).IsWatertight);
+        Assert.Equal(HullKind.Convex, Hull.FromGeometry(x).Kind);
         // Not watertight
         var y = LoadShape("Models/5sidebox.obj");
-        Assert.False(Hull.FromGeometry(y).IsWatertight);
+        Assert.Equal(HullKind.NonWatertight, Hull.FromGeometry(y).Kind);
     }
 
     [Fact]
     public void NonConvexGeometry()
     {
         var hull = Hull.FromGeometry(LoadShape("Models/concave1.obj"));
-        Assert.True(hull.IsWatertight);
         Assert.Equal(AppliedRepairs.None, hull.Repairs);
-        Assert.False(hull.DegenerateMesh);
-        Assert.False(hull.IsConvex);
+        Assert.Equal(HullKind.Concave, hull.Kind);
+       
     }
 
     private static readonly Vector3[] cubeVertices = new Vector3[]
@@ -53,8 +53,8 @@ public class HullTests
     public void ConvexCubeFromArrays()
     {
         var hull = Hull.FromTriangles(cubeVertices, cubeIndices, false);
-        Assert.True(hull.IsWatertight);
-        Assert.True(hull.IsConvex);
+        Assert.Equal(HullKind.Convex, hull.Kind);
+
     }
 
     [Fact]
@@ -68,8 +68,7 @@ public class HullTests
         // After fixing
         var hull = Hull.FromTriangles(cubeVertices, flippedIndices, false);
         Assert.Equal(cubeIndices, hull.Indices);
-        Assert.True(hull.IsWatertight);
-        Assert.True(hull.IsConvex);
+        Assert.Equal(HullKind.Convex, hull.Kind);
         Assert.Equal(AppliedRepairs.FixedWinding, hull.Repairs);
     }
 
@@ -84,19 +83,18 @@ public class HullTests
         // After fixing
         var hull = Hull.FromTriangles(cubeVertices, flippedIndices, false);
         Assert.Equal(cubeIndices, hull.Indices);
-        Assert.True(hull.IsWatertight);
-        Assert.True(hull.IsConvex);
+        Assert.Equal(HullKind.Convex, hull.Kind);
         Assert.Equal(AppliedRepairs.FlippedNormals, hull.Repairs);
     }
 
     [Fact]
     public void MakeConvexSuzanne()
     {
-        var sh = LoadShape("Models/convexsuzanne.obj");
+        var sh = LoadShape("Models/suzanne.obj");
         var h = Hull.FromGeometry(sh);
 
         h.MakeConvex();
-        Assert.True(h.IsConvex);
+        Assert.Equal(HullKind.Convex, h.Kind);
     }
     
     
@@ -106,17 +104,18 @@ public class HullTests
             .Select(x => new object[] { x });
     }
 
-    record TestCase(bool convex, bool fixedwinding, bool multibody, string file);
+    record TestCase(HullKind kind, bool fixedwinding, string file);
 
     [Theory]
     [MemberData(nameof(GetTestCases))]
     public void ConfirmTestModels(string test)
     {
-        var testCase = JsonSerializer.Deserialize<TestCase>(File.ReadAllText(test));
+        var options = new JsonSerializerOptions
+        { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
+        var testCase = JsonSerializer.Deserialize<TestCase>(File.ReadAllText(test), options);
         var shape = LoadShape($"Models/{testCase.file}");
         var hull = Hull.FromGeometry(shape);
-        Assert.Equal(testCase.convex, hull.IsConvex);
-        Assert.Equal(testCase.multibody, hull.Multibody);
+        Assert.Equal(testCase.kind, hull.Kind);
         Assert.Equal(testCase.fixedwinding,
             (hull.Repairs & AppliedRepairs.FixedWinding) == AppliedRepairs.FixedWinding);
     }
