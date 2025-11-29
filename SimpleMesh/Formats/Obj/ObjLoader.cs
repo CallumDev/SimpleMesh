@@ -1,10 +1,9 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Numerics;
 using SimpleMesh.Util;
+// ReSharper disable NullableWarningSuppressionIsUsed
 
 namespace SimpleMesh.Formats.Obj
 {
@@ -13,7 +12,7 @@ namespace SimpleMesh.Formats.Obj
         private const int STREAMREADER_BUFFER_SIZE = 32768;
         public static Model Load(Stream stream, ModelLoadContext ctx)
         {
-            using var reader = new StreamReader(stream, null, true, STREAMREADER_BUFFER_SIZE);
+            using var reader = new StreamReader(stream, null!, true, STREAMREADER_BUFFER_SIZE);
             int lineNo = 1;
 
             List<Vector3> positions = new List<Vector3>();
@@ -28,7 +27,7 @@ namespace SimpleMesh.Formats.Obj
             
             rootNode.Name = "default";
             ModelNode currentNode = rootNode;
-            VertexBufferBuilder currentVertex = new VertexBufferBuilder();
+            VertexBufferBuilder currentVertex = new VertexBufferBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
             List<uint> currentIndices = new List<uint>();
             List<TriangleGroup> currentGroups = new List<TriangleGroup>();
             VertexAttributes attributes = VertexAttributes.Position;
@@ -36,10 +35,22 @@ namespace SimpleMesh.Formats.Obj
             bool warnedNonPolygonal = false;
             int lastIndex = 0;
 
-            Material GetMaterial(string name) {
+            Dictionary<string, ObjMaterial> srcMaterials = new();
+
+            void SetMaterial(ObjMaterial src, Material dest)
+            {
+                dest.DiffuseColor = src.Diffuse;
+                if (src.DiffuseMap != null)
+                    dest.DiffuseTexture = new(src.DiffuseMap, 0);
+            }
+
+            Material GetMaterial(string name) 
+            {
                 if (!model.Materials.TryGetValue(name, out Material x))
                 {
                     x = new Material() {DiffuseColor = LinearColor.White, Name = name};
+                    if (srcMaterials.TryGetValue(name, out var srcMat))
+                        SetMaterial(srcMat, x);
                     model.Materials.Add(name, x);
                 }
                 return x;
@@ -81,7 +92,7 @@ namespace SimpleMesh.Formats.Obj
                 }
                 else if (IsParam(ln, 'v', 't') && GetParam(ln, out param))
                 {
-                    if(ParseHelpers.FloatSpan(param, tex) != 2)
+                    if(ParseHelpers.FloatSpan(param, tex) < 2)
                         throw new ModelLoadException($"Invalid texture element at line {lineNo}");
                     texcoords.Add(new Vector2(tex[0], tex[1]));
                 }
@@ -137,7 +148,7 @@ namespace SimpleMesh.Formats.Obj
                             attributes |= VertexAttributes.Texture1;
                             v.Texture1 = texcoords[ov.TexCoord];
                         }
-                        currentIndices.Add((uint)currentVertex.Add(ref v));
+                        currentIndices.Add((uint)(currentVertex.Add(ref v) - currentVertex.BaseVertex));
                     }
                 }
                 else if (IsParam(ln, 'f') && GetParam(ln, out param))
@@ -193,7 +204,7 @@ namespace SimpleMesh.Formats.Obj
                             attributes |= VertexAttributes.Texture1;
                             v.Texture1 = texcoords[ov.TexCoord];
                         }
-                        currentIndices.Add((uint)currentVertex.Add(ref v));
+                        currentIndices.Add((uint)(currentVertex.Add(ref v) - currentVertex.BaseVertex));
                     }
                 }
                 else if (IsParam(ln, 'o') && GetParam(ln, out var objname))
@@ -220,7 +231,7 @@ namespace SimpleMesh.Formats.Obj
 
                             currentNode.Geometry = new Geometry();
                             currentNode.Geometry.Attributes = attributes;
-                            currentNode.Geometry.Vertices = currentVertex.Vertices.ToArray();
+                            currentNode.Geometry.Vertices = currentVertex.GetVertices();
                             currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
                             currentNode.Geometry.Groups = currentGroups.ToArray();
                             currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
@@ -236,7 +247,7 @@ namespace SimpleMesh.Formats.Obj
                             currentNode = new ModelNode() { Name = objname.ToString() };
                         }
                         isL = isF = false;
-                        currentVertex = new VertexBufferBuilder();
+                        currentVertex = new VertexBufferBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
                         currentIndices = new List<uint>();
                         currentGroups = new List<TriangleGroup>();
                         attributes = VertexAttributes.Position;
@@ -262,8 +273,16 @@ namespace SimpleMesh.Formats.Obj
                 {
                     currentMaterial = param.ToString();
                 }
+                else if (StartsWithOrdinal(ln, "mtllib") && GetParam(ln, out param))
+                {
+                    Stream mtlstream;
+                    if (ctx.ExternalResources.CanLoadResources &&
+                        (mtlstream = ctx.ExternalResources.OpenStream(param.ToString())) != null)
+                    {
+                        srcMaterials = ReadMtlLib(mtlstream);
+                    }
+                }
                 else if (IsParam(ln, 's') ||
-                         StartsWithOrdinal(ln, "mtllib") ||
                          StartsWithOrdinal(ln, "usemap"))
                 {
                     //ignore
@@ -289,7 +308,7 @@ namespace SimpleMesh.Formats.Obj
             {
                 currentNode.Geometry = new Geometry();
                 currentNode.Geometry.Attributes = attributes;
-                currentNode.Geometry.Vertices = currentVertex.Vertices.ToArray();
+                currentNode.Geometry.Vertices = currentVertex.GetVertices();
                 currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
                 currentNode.Geometry.Groups = currentGroups.ToArray();
                 currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
@@ -299,8 +318,44 @@ namespace SimpleMesh.Formats.Obj
             if(currentNode != rootNode)
                 rootNode.Children.Add(currentNode);
             model.Geometries = geometries.ToArray();
+
+            if (ctx.ExternalResources.CanLoadResources)
+            {
+                model.Images = new();
+                foreach (var m in model.Materials.Values)
+                {
+                    if (m.DiffuseTexture == null)
+                        continue;
+                    if (model.Images.ContainsKey(m.DiffuseTexture.Name))
+                        continue;
+                    var imgStream = ctx.ExternalResources.OpenStream(m.DiffuseTexture.Name);
+                    if (imgStream == null)
+                        continue;
+                    var ms = new MemoryStream();
+                    imgStream.CopyTo(ms);
+                    imgStream.Dispose();
+                    model.Images[m.DiffuseTexture.Name] = new ImageData(
+                        m.DiffuseTexture.Name,
+                        ms.ToArray(),
+                        GuessMime(m.DiffuseTexture.Name));
+                }
+                if (model.Images.Count == 0)
+                    model.Images = null;
+            }
+           
             return model;
         }
+
+        static string GuessMime(string filename)
+        {
+            if (filename.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                return "image/png";
+            if (filename.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                filename.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                return "image/jpeg";
+            return "";
+        }
+        
         static bool ResolveVertex(ref ObjVertex vtx, int lnV, int lnVN, int lnVT)
         {
             static bool ResolveIdx(int ln, ref int idx)
@@ -386,6 +441,45 @@ namespace SimpleMesh.Formats.Obj
         {
             if (s.Length < 2) return false;
             return s[0] == c && char.IsWhiteSpace(s[1]);
+        }
+
+        class ObjMaterial
+        {
+            public LinearColor Diffuse = LinearColor.White;
+            public string DiffuseMap = null;
+        }
+
+        static Dictionary<string, ObjMaterial> ReadMtlLib(Stream stream)
+        {
+            using var reader = new StreamReader(stream, null!, true, STREAMREADER_BUFFER_SIZE);
+            string src_line;
+            ObjMaterial current = null;
+            var materials = new Dictionary<string, ObjMaterial>();
+            Span<float> d = stackalloc float[3];
+            while ((src_line = reader.ReadLine()) != null)
+            {
+                var ln = src_line.AsSpan().Trim();
+                //skip empty line
+                if (ln.IsWhiteSpace()) continue;
+                ReadOnlySpan<char> param;
+                if (StartsWithOrdinal(ln, "newmtl") && GetParam(ln, out param))
+                {
+                    current = new();
+                    materials[param.ToString()] = current;
+                }
+                else if (current != null && StartsWithOrdinal(ln, "map_Kd") && GetParam(ln, out param))
+                {
+                    current.DiffuseMap = param.ToString();
+                }
+                else if (current != null && IsParam(ln, 'K', 'd') && GetParam(ln, out param))
+                {
+                    if (ParseHelpers.FloatSpan(param, d) == 3)
+                    {
+                        current.Diffuse = LinearColor.FromSrgb(d[0], d[1], d[2], 1);
+                    }
+                }
+            }
+            return materials;
         }
     }
 }

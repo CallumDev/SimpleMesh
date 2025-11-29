@@ -35,11 +35,47 @@ namespace SimpleMesh.Formats.GLTF
                 g.Name = nameProp.GetString();
             if (!element.TryGetProperty("primitives", out var primArray))
                 throw new ModelLoadException(GError("mesh does not contain primitives"));
-            VertexBufferBuilder vertexArray = new VertexBufferBuilder();
             int startIndex = 0;
             List<uint> indexArray = new List<uint>();
             List<TriangleGroup> tg = new List<TriangleGroup>();
             g.Attributes = VertexAttributes.Position;
+
+            // Calculate attributes
+            foreach (var prim in primArray.EnumerateArray())
+            {
+                if (!prim.TryGetProperty("attributes", out var attrArray))
+                    throw new ModelLoadException(GError("mesh primitive does not contain attributes"));
+                foreach (var elem in attrArray.EnumerateObject())
+                {
+                    switch (elem.Name)
+                    {
+                        case "NORMAL":
+                            g.Attributes |= VertexAttributes.Normal;
+                            break;
+                        case "TEXCOORD_0":
+                            g.Attributes |= VertexAttributes.Texture1;
+                            break;
+                        case "TEXCOORD_1":
+                            g.Attributes |= VertexAttributes.Texture2;
+                            break;
+                        case "TEXCOORD_2":
+                            g.Attributes |= VertexAttributes.Texture3;
+                            break;
+                        case "TEXCOORD_3":
+                            g.Attributes |= VertexAttributes.Texture4;
+                            break;
+                        case "COLOR_0":
+                            g.Attributes |= VertexAttributes.Diffuse;
+                            break;
+                        case "TANGENT":
+                            g.Attributes |= VertexAttributes.Tangent;
+                            break;
+                    }
+                }
+            }
+
+            VertexBufferBuilder vertexArray = new VertexBufferBuilder(g.Attributes);
+            
             int startMode = -1;
             foreach (var prim in primArray.EnumerateArray())
             {
@@ -75,31 +111,24 @@ namespace SimpleMesh.Formats.GLTF
                             break;
                         case "NORMAL":
                             normIndex = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Normal;
                             break;
                         case "TEXCOORD_0":
                             tex1Index = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Texture1;
                             break;
                         case "TEXCOORD_1":
                             tex2Index = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Texture2;
                             break;
                         case "TEXCOORD_2":
                             tex3Index = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Texture3;
                             break;
                         case "TEXCOORD_3":
                             tex4Index = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Texture4;
                             break;
                         case "COLOR_0":
                             colIndex = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Diffuse;
                             break;
                         case "TANGENT":
                             tangentIndex = elem.Value.GetInt32();
-                            g.Attributes |= VertexAttributes.Tangent;
                             break;
                     }
                 }
@@ -205,7 +234,8 @@ namespace SimpleMesh.Formats.GLTF
                 default:
                     throw new Exception(GError("Unsupported primitive mode " + startMode));
             }
-            g.Vertices = vertexArray.Vertices.ToArray();
+
+            g.Vertices = vertexArray.GetVertices();
             g.Indices = Indices.FromBuffer(indexArray.ToArray());
             g.Groups = tg.ToArray();
             

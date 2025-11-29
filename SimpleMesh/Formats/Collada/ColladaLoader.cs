@@ -234,7 +234,14 @@ static class ColladaLoader
             ? geo.Attribute("id")!.Value
             : geo.Attribute("name")!.Value;
 
-        var vertices = new VertexBufferBuilder();
+        // All supported
+        var vertices = new VertexBufferBuilder(
+            VertexAttributes.Position |
+            VertexAttributes.Normal |
+            VertexAttributes.Diffuse |
+            VertexAttributes.Texture1 |
+            VertexAttributes.Texture2);
+        
         var indices = new List<uint>();
         List<TriangleGroup> groups = new List<TriangleGroup>();
 
@@ -425,6 +432,8 @@ static class ColladaLoader
                         break;
                 }
             }
+            
+
 
             for (int i = 0; i < indexCount; i++)
             {
@@ -455,7 +464,7 @@ static class ColladaLoader
         }
 
         conv.Kind = kind;
-        conv.Vertices = vertices.Vertices.ToArray();
+        conv.Vertices = vertices.GetVertices();
         conv.Indices = Indices.FromBuffer(indices.ToArray());
         conv.Groups = groups.ToArray();
         return conv;
