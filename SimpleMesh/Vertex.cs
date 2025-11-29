@@ -1,6 +1,8 @@
 using System;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace SimpleMesh
 {
@@ -55,7 +57,21 @@ namespace SimpleMesh
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Position, Normal, Diffuse, Tangent, Texture1, Texture2, Texture3, Texture4);
+            var self = new Span<Vertex>(ref this);
+            var uints = MemoryMarshal.Cast<Vertex, uint>(self);
+            uint k = 1535517821;
+            for (int i = 0; i < uints.Length; i++)
+            {
+                k = BitOperations.RotateLeft(
+                    k ^ BitOperations.RotateLeft(
+                        uints[i] * 3432918353U, 15
+                        ) * 461845907U,
+                    13
+                );
+            }
+            k = (uint)((k ^ (k >> 16)) * -2048144789);
+            k = (uint)((k ^ (k >> 13)) * -1028477387);
+            return (int)(k ^ k >> 16);
         }
 
         public static bool operator ==(Vertex left, Vertex right)
