@@ -51,10 +51,10 @@ public static class TangentGeneration
         }
     }
     
-    public static unsafe void GenerateMikkTSpace(ITangentGeometry geometry)
+    public static void GenerateMikkTSpace(ITangentGeometry geometry)
     {
         var context = new SMikkTSpaceContext();
         context.Interface = new MikkInterfaceImpl() { G = geometry };
-        MikkTSpace.genTangSpaceDefault(&context);
+        MikkTSpace.genTangSpaceDefault(context);
     }
 }

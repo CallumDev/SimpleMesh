@@ -246,12 +246,12 @@ unsafe static class MikkTSpace
     }
 
 
-    public static bool genTangSpaceDefault(SMikkTSpaceContext* pContext)
+    public static bool genTangSpaceDefault(SMikkTSpaceContext context)
     {
-        return genTangSpace(pContext, 180.0f);
+        return genTangSpace(context, 180.0f);
     }
 
-    public static bool genTangSpace(SMikkTSpaceContext* pContext, float fAngularThreshold)
+    public static bool genTangSpace(SMikkTSpaceContext context, float fAngularThreshold)
     {
         // count nr_triangles
         int* piTriListIn = null, piGroupTrianglesBuffer = null;
@@ -261,18 +261,19 @@ unsafe static class MikkTSpace
         int iNrTrianglesIn = 0, f = 0, t = 0, i = 0;
         int iNrTSPaces = 0, iTotTris = 0, iDegenTriangles = 0, iNrMaxGroups = 0;
         int iNrActiveGroups = 0, index = 0;
-        int iNrFaces = pContext->Interface.GetNumFaces();
+        int iNrFaces = context.Interface.GetNumFaces();
         bool bRes = false;
         float fThresCos = (float)MathF.Cos((fAngularThreshold * (float)MathF.PI) / 180.0f);
 
         // verify all call-backs have been set
-        if (pContext->Interface == null)
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+        if (context.Interface == null)
             return false;
 
         // count triangles on supported faces
         for (f = 0; f < iNrFaces; f++)
         {
-            int verts = pContext->Interface.GetNumVerticesOfFace(f);
+            int verts = context.Interface.GetNumVerticesOfFace(f);
             if (verts == 3) ++iNrTrianglesIn;
             else if (verts == 4) iNrTrianglesIn += 2;
         }
@@ -290,11 +291,11 @@ unsafe static class MikkTSpace
         }
 
         // make an initial triangle --> face index list
-        iNrTSPaces = GenerateInitialVerticesIndexList(pTriInfos, piTriListIn, pContext, iNrTrianglesIn);
+        iNrTSPaces = GenerateInitialVerticesIndexList(pTriInfos, piTriListIn, context, iNrTrianglesIn);
 
         // make a welded index list of identical positions and attributes (pos, norm, texc)
         //printf("gen welded index list begin\n");
-        GenerateSharedVerticesIndexList(piTriListIn, pContext, iNrTrianglesIn);
+        GenerateSharedVerticesIndexList(piTriListIn, context, iNrTrianglesIn);
         //printf("gen welded index list end\n");
 
         // Mark all degenerate triangles
@@ -305,9 +306,9 @@ unsafe static class MikkTSpace
             int i0 = piTriListIn[t * 3 + 0];
             int i1 = piTriListIn[t * 3 + 1];
             int i2 = piTriListIn[t * 3 + 2];
-            Vector3 p0 = GetPosition(pContext, i0);
-            Vector3 p1 = GetPosition(pContext, i1);
-            Vector3 p2 = GetPosition(pContext, i2);
+            Vector3 p0 = GetPosition(context, i0);
+            Vector3 p1 = GetPosition(context, i1);
+            Vector3 p2 = GetPosition(context, i2);
             if (veq(p0, p1) || veq(p0, p2) || veq(p1, p2)) // degenerate
             {
                 pTriInfos[t].iFlag |= MARK_DEGENERATE;
@@ -327,7 +328,7 @@ unsafe static class MikkTSpace
 
         // evaluate triangle level attributes and neighbor list
         //printf("gen neighbors list begin\n");
-        InitTriInfo(pTriInfos, piTriListIn, pContext, iNrTrianglesIn);
+        InitTriInfo(pTriInfos, piTriListIn, context, iNrTrianglesIn);
         //printf("gen neighbors list end\n");
 
 
@@ -378,7 +379,7 @@ unsafe static class MikkTSpace
         // based on fAngularThreshold. Finally a tangent space is made for
         // every resulting subgroup
         //printf("gen tspaces begin\n");
-        bRes = GenerateTSpaces(psTspace, pTriInfos, pGroups, iNrActiveGroups, piTriListIn, fThresCos, pContext);
+        bRes = GenerateTSpaces(psTspace, pTriInfos, pGroups, iNrActiveGroups, piTriListIn, fThresCos, context);
         //printf("gen tspaces end\n");
 
         // clean up
@@ -399,7 +400,7 @@ unsafe static class MikkTSpace
         // the good triangle to the coinciding vertex.
         // all other degenerate triangles will just copy a space from any good triangle
         // with the same welded index in piTriListIn[].
-        DegenEpilogue(psTspace, pTriInfos, piTriListIn, pContext, iNrTrianglesIn, iTotTris);
+        DegenEpilogue(psTspace, pTriInfos, piTriListIn, context, iNrTrianglesIn, iTotTris);
 
         free(pTriInfos);
         free(piTriListIn);
@@ -407,7 +408,7 @@ unsafe static class MikkTSpace
         index = 0;
         for (f = 0; f < iNrFaces; f++)
         {
-            int verts = pContext->Interface.GetNumVerticesOfFace(f);
+            int verts = context.Interface.GetNumVerticesOfFace(f);
             if (verts != 3 && verts != 4) continue;
 
 
@@ -447,13 +448,13 @@ unsafe static class MikkTSpace
                     pTSpace->vOt.X, pTSpace->vOt.Y, pTSpace->vOt.Z
                 }
                 ;
-                if (pContext->m_pInterface->m_setTSpace != null)
-                    pContext->m_pInterface->m_setTSpace(pContext, tang, bitang, pTSpace->fMagS, pTSpace->fMagT,
+                if (context.m_pInterface->m_setTSpace != null)
+                    context.m_pInterface->m_setTSpace(context, tang, bitang, pTSpace->fMagS, pTSpace->fMagT,
                         pTSpace->bOrient, f, i);*/
-                pContext->Interface.SetTSpaceBasic((float*)&tang, pTSpace->bOrient == true ? 1.0f : (-1.0f),
+                context.Interface.SetTSpaceBasic((float*)&tang, pTSpace->bOrient == true ? 1.0f : (-1.0f),
                     f, i);
-                /*if (pContext->m_pInterface->m_setTSpaceBasic != null)
-                    pContext->m_pInterface->m_setTSpaceBasic(pContext, tang, pTSpace->bOrient == true ? 1.0f : (-1.0f),
+                /*if (context.m_pInterface->m_setTSpaceBasic != null)
+                    context.m_pInterface->m_setTSpaceBasic(context, tang, pTSpace->bOrient == true ? 1.0f : (-1.0f),
                         f, i);*/
 
                 ++index;
@@ -487,7 +488,7 @@ unsafe static class MikkTSpace
     }
 
 
-    static void GenerateSharedVerticesIndexList(int* piTriList_in_and_out, SMikkTSpaceContext* pContext,
+    static void GenerateSharedVerticesIndexList(int* piTriList_in_and_out, SMikkTSpaceContext context,
         int iNrTrianglesIn)
 
     {
@@ -496,13 +497,13 @@ unsafe static class MikkTSpace
         STmpVert* pTmpVert = null;
         int i = 0, iChannel = 0, k = 0, e = 0;
         int iMaxCount = 0;
-        Vector3 vMin = GetPosition(pContext, 0), vMax = vMin, vDim;
+        Vector3 vMin = GetPosition(context, 0), vMax = vMin, vDim;
         float fMin, fMax;
         for (i = 1; i < (iNrTrianglesIn * 3); i++)
         {
             int index = piTriList_in_and_out[i];
 
-            Vector3 vP = GetPosition(pContext, index);
+            Vector3 vP = GetPosition(context, index);
             if (vMin.X > vP.X) vMin.X = vP.X;
             else if (vMax.X < vP.X) vMax.X = vP.X;
             if (vMin.Y > vP.Y) vMin.Y = vP.Y;
@@ -540,7 +541,7 @@ unsafe static class MikkTSpace
             if (piHashCount != null) free(piHashCount);
             if (piHashOffsets != null) free(piHashOffsets);
             if (piHashCount2 != null) free(piHashCount2);
-            GenerateSharedVerticesIndexListSlow(piTriList_in_and_out, pContext, iNrTrianglesIn);
+            GenerateSharedVerticesIndexListSlow(piTriList_in_and_out, context, iNrTrianglesIn);
             return;
         }
 
@@ -551,7 +552,7 @@ unsafe static class MikkTSpace
         for (i = 0; i < (iNrTrianglesIn * 3); i++)
         {
             int index = piTriList_in_and_out[i];
-            Vector3 vP = GetPosition(pContext, index);
+            Vector3 vP = GetPosition(context, index);
             float fVal = iChannel == 0 ? vP.X : (iChannel == 1 ? vP.Y : vP.Z);
             int iCell = FindGridCell(fMin, fMax, fVal);
             ++piHashCount[iCell];
@@ -566,7 +567,7 @@ unsafe static class MikkTSpace
         for (i = 0; i < (iNrTrianglesIn * 3); i++)
         {
             int index = piTriList_in_and_out[i];
-            Vector3 vP = GetPosition(pContext, index);
+            Vector3 vP = GetPosition(context, index);
             float fVal = iChannel == 0 ? vP.X : (iChannel == 1 ? vP.Y : vP.Z);
             int iCell = FindGridCell(fMin, fMax, fVal);
             int* pTable = null;
@@ -602,17 +603,17 @@ unsafe static class MikkTSpace
                 for (e = 0; e < iEntries; e++)
                 {
                     i = pTable[e];
-                    Vector3 vP = GetPosition(pContext, piTriList_in_and_out[i]);
+                    Vector3 vP = GetPosition(context, piTriList_in_and_out[i]);
                     pTmpVert[e].vert[0] = vP.X;
                     pTmpVert[e].vert[1] = vP.Y;
                     pTmpVert[e].vert[2] = vP.Z;
                     pTmpVert[e].index = i;
                 }
 
-                MergeVertsFast(piTriList_in_and_out, pTmpVert, pContext, 0, iEntries - 1);
+                MergeVertsFast(piTriList_in_and_out, pTmpVert, context, 0, iEntries - 1);
             }
             else
-                MergeVertsSlow(piTriList_in_and_out, pContext, pTable, iEntries);
+                MergeVertsSlow(piTriList_in_and_out, context, pTable, iEntries);
         }
 
         if (pTmpVert != null)
@@ -625,8 +626,8 @@ unsafe static class MikkTSpace
         free(piHashOffsets);
     }
 
-    static void MergeVertsFast(int* piTriList_in_and_out, STmpVert* pTmpVert, SMikkTSpaceContext*
-        pContext, int iL_in, int iR_in)
+    static void MergeVertsFast(int* piTriList_in_and_out, STmpVert* pTmpVert, SMikkTSpaceContext
+        context, int iL_in, int iR_in)
     {
         // make bbox
         int c = 0, l = 0, channel = 0;
@@ -671,9 +672,9 @@ unsafe static class MikkTSpace
             {
                 int i = pTmpVert[l].index;
                 int index = piTriList_in_and_out[i];
-                Vector3 vP = GetPosition(pContext, index);
-                Vector3 vN = GetNormal(pContext, index);
-                Vector3 vT = GetTexCoord(pContext, index);
+                Vector3 vP = GetPosition(context, index);
+                Vector3 vN = GetNormal(context, index);
+                Vector3 vT = GetTexCoord(context, index);
 
                 bool bNotFound = true;
                 int l2 = iL_in, i2rec = -1;
@@ -681,9 +682,9 @@ unsafe static class MikkTSpace
                 {
                     int i2 = pTmpVert[l2].index;
                     int index2 = piTriList_in_and_out[i2];
-                    Vector3 vP2 = GetPosition(pContext, index2);
-                    Vector3 vN2 = GetNormal(pContext, index2);
-                    Vector3 vT2 = GetTexCoord(pContext, index2);
+                    Vector3 vP2 = GetPosition(context, index2);
+                    Vector3 vN2 = GetNormal(context, index2);
+                    Vector3 vT2 = GetTexCoord(context, index2);
                     i2rec = i2;
 
                     //if (vP==vP2 && vN==vN2 && vT==vT2)
@@ -746,14 +747,14 @@ unsafe static class MikkTSpace
 
             // only need to weld when there is more than 1 instance of the (x,y,z)
             if (iL_in < iR)
-                MergeVertsFast(piTriList_in_and_out, pTmpVert, pContext, iL_in, iR); // weld all left of fSep
+                MergeVertsFast(piTriList_in_and_out, pTmpVert, context, iL_in, iR); // weld all left of fSep
             if (iL < iR_in)
-                MergeVertsFast(piTriList_in_and_out, pTmpVert, pContext, iL,
+                MergeVertsFast(piTriList_in_and_out, pTmpVert, context, iL,
                     iR_in); // weld all right of (or equal to) fSep
         }
     }
 
-    static void MergeVertsSlow(int* piTriList_in_and_out, SMikkTSpaceContext* pContext, int*
+    static void MergeVertsSlow(int* piTriList_in_and_out, SMikkTSpaceContext context, int*
         pTable, int iEntries)
     {
         // this can be optimized further using a tree structure or more hashing.
@@ -762,9 +763,9 @@ unsafe static class MikkTSpace
         {
             int i = pTable[e];
             int index = piTriList_in_and_out[i];
-            Vector3 vP = GetPosition(pContext, index);
-            Vector3 vN = GetNormal(pContext, index);
-            Vector3 vT = GetTexCoord(pContext, index);
+            Vector3 vP = GetPosition(context, index);
+            Vector3 vN = GetNormal(context, index);
+            Vector3 vT = GetTexCoord(context, index);
 
             bool bNotFound = true;
             int e2 = 0, i2rec = -1;
@@ -772,9 +773,9 @@ unsafe static class MikkTSpace
             {
                 int i2 = pTable[e2];
                 int index2 = piTriList_in_and_out[i2];
-                Vector3 vP2 = GetPosition(pContext, index2);
-                Vector3 vN2 = GetNormal(pContext, index2);
-                Vector3 vT2 = GetTexCoord(pContext, index2);
+                Vector3 vP2 = GetPosition(context, index2);
+                Vector3 vN2 = GetNormal(context, index2);
+                Vector3 vT2 = GetTexCoord(context, index2);
                 i2rec = i2;
 
                 if (veq(vP, vP2) && veq(vN, vN2) && veq(vT, vT2))
@@ -789,8 +790,8 @@ unsafe static class MikkTSpace
         }
     }
 
-    static void GenerateSharedVerticesIndexListSlow(int* piTriList_in_and_out, SMikkTSpaceContext*
-        pContext, int iNrTrianglesIn)
+    static void GenerateSharedVerticesIndexListSlow(int* piTriList_in_and_out, SMikkTSpaceContext
+        context, int iNrTrianglesIn)
     {
         int iNumUniqueVerts = 0, t = 0, i = 0;
         for (t = 0; t < iNrTrianglesIn; t++)
@@ -800,9 +801,9 @@ unsafe static class MikkTSpace
                 int offs = t * 3 + i;
                 int index = piTriList_in_and_out[offs];
 
-                Vector3 vP = GetPosition(pContext, index);
-                Vector3 vN = GetNormal(pContext, index);
-                Vector3 vT = GetTexCoord(pContext, index);
+                Vector3 vP = GetPosition(context, index);
+                Vector3 vN = GetNormal(context, index);
+                Vector3 vT = GetTexCoord(context, index);
 
                 bool bFound = false;
                 int t2 = 0, index2rec = -1;
@@ -812,9 +813,9 @@ unsafe static class MikkTSpace
                     while (!bFound && j < 3)
                     {
                         int index2 = piTriList_in_and_out[t2 * 3 + j];
-                        Vector3 vP2 = GetPosition(pContext, index2);
-                        Vector3 vN2 = GetNormal(pContext, index2);
-                        Vector3 vT2 = GetTexCoord(pContext, index2);
+                        Vector3 vP2 = GetPosition(context, index2);
+                        Vector3 vN2 = GetNormal(context, index2);
+                        Vector3 vT2 = GetTexCoord(context, index2);
 
                         if (veq(vP, vP2) && veq(vN, vN2) && veq(vT, vT2))
                             bFound = true;
@@ -837,14 +838,14 @@ unsafe static class MikkTSpace
         }
     }
 
-    static int GenerateInitialVerticesIndexList(STriInfo* pTriInfos, int* piTriList_out, SMikkTSpaceContext*
-        pContext, int iNrTrianglesIn)
+    static int GenerateInitialVerticesIndexList(STriInfo* pTriInfos, int* piTriList_out, SMikkTSpaceContext
+        context, int iNrTrianglesIn)
     {
         int iTSpacesOffs = 0, f = 0, t = 0;
         int iDstTriIndex = 0;
-        for (f = 0; f < pContext->Interface.GetNumFaces(); f++)
+        for (f = 0; f < context.Interface.GetNumFaces(); f++)
         {
-            int verts = pContext->Interface.GetNumVerticesOfFace(f);
+            int verts = context.Interface.GetNumVerticesOfFace(f);
             if (verts != 3 && verts != 4) continue;
 
             pTriInfos[iDstTriIndex].iOrgFaceNumber = f;
@@ -876,10 +877,10 @@ unsafe static class MikkTSpace
                     int i1 = MakeIndex(f, 1);
                     int i2 = MakeIndex(f, 2);
                     int i3 = MakeIndex(f, 3);
-                    Vector3 T0 = GetTexCoord(pContext, i0);
-                    Vector3 T1 = GetTexCoord(pContext, i1);
-                    Vector3 T2 = GetTexCoord(pContext, i2);
-                    Vector3 T3 = GetTexCoord(pContext, i3);
+                    Vector3 T0 = GetTexCoord(context, i0);
+                    Vector3 T1 = GetTexCoord(context, i1);
+                    Vector3 T2 = GetTexCoord(context, i2);
+                    Vector3 T3 = GetTexCoord(context, i3);
                     float distSQ_02 = LengthSquared(vsub(T2, T0));
                     float distSQ_13 = LengthSquared(vsub(T3, T1));
                     bool bQuadDiagIs_02;
@@ -889,10 +890,10 @@ unsafe static class MikkTSpace
                         bQuadDiagIs_02 = false;
                     else
                     {
-                        Vector3 P0 = GetPosition(pContext, i0);
-                        Vector3 P1 = GetPosition(pContext, i1);
-                        Vector3 P2 = GetPosition(pContext, i2);
-                        Vector3 P3 = GetPosition(pContext, i3);
+                        Vector3 P0 = GetPosition(context, i0);
+                        Vector3 P1 = GetPosition(context, i1);
+                        Vector3 P2 = GetPosition(context, i2);
+                        Vector3 P3 = GetPosition(context, i3);
                         distSQ_02 = LengthSquared(vsub(P2, P0));
                         distSQ_13 = LengthSquared(vsub(P3, P1));
 
@@ -959,40 +960,40 @@ unsafe static class MikkTSpace
         return iTSpacesOffs;
     }
 
-    static Vector3 GetPosition(SMikkTSpaceContext* pContext, int index)
+    static Vector3 GetPosition(SMikkTSpaceContext context, int index)
     {
         int iF, iI;
         Vector3 res;
 
         float* pos = stackalloc float[3];
         IndexToData(&iF, &iI, index);
-        pContext->Interface.GetPosition(pos, iF, iI);
+        context.Interface.GetPosition(pos, iF, iI);
         res.X = pos[0];
         res.Y = pos[1];
         res.Z = pos[2];
         return res;
     }
 
-    static Vector3 GetNormal(SMikkTSpaceContext* pContext, int index)
+    static Vector3 GetNormal(SMikkTSpaceContext context, int index)
     {
         int iF, iI;
         Vector3 res;
         float* norm = stackalloc float[3];
         IndexToData(&iF, &iI, index);
-        pContext->Interface.GetNormal(norm, iF, iI);
+        context.Interface.GetNormal(norm, iF, iI);
         res.X = norm[0];
         res.Y = norm[1];
         res.Z = norm[2];
         return res;
     }
 
-    static Vector3 GetTexCoord(SMikkTSpaceContext* pContext, int index)
+    static Vector3 GetTexCoord(SMikkTSpaceContext context, int index)
     {
         int iF, iI;
         Vector3 res;
         float* texc = stackalloc float[2];
         IndexToData(&iF, &iI, index);
-        pContext->Interface.GetTexCoord(texc, iF, iI);
+        context.Interface.GetTexCoord(texc, iF, iI);
         res.X = texc[0];
         res.Y = texc[1];
         res.Z = 1.0f;
@@ -1014,11 +1015,11 @@ unsafe static class MikkTSpace
 
 
 // returns the texture area times 2
-    static float CalcTexArea(SMikkTSpaceContext* pContext, int* indices)
+    static float CalcTexArea(SMikkTSpaceContext context, int* indices)
     {
-        Vector3 t1 = GetTexCoord(pContext, indices[0]);
-        Vector3 t2 = GetTexCoord(pContext, indices[1]);
-        Vector3 t3 = GetTexCoord(pContext, indices[2]);
+        Vector3 t1 = GetTexCoord(context, indices[0]);
+        Vector3 t2 = GetTexCoord(context, indices[1]);
+        Vector3 t3 = GetTexCoord(context, indices[2]);
 
         float t21x = t2.X - t1.X;
         float t21y = t2.Y - t1.Y;
@@ -1030,7 +1031,7 @@ unsafe static class MikkTSpace
         return fSignedAreaSTx2 < 0 ? (-fSignedAreaSTx2) : fSignedAreaSTx2;
     }
 
-    static void InitTriInfo(STriInfo* pTriInfos, int* piTriListIn, SMikkTSpaceContext* pContext, int iNrTrianglesIn)
+    static void InitTriInfo(STriInfo* pTriInfos, int* piTriListIn, SMikkTSpaceContext context, int iNrTrianglesIn)
     {
         int f = 0, i = 0, t = 0;
         // pTriInfos[f].iFlag is cleared in GenerateInitialVerticesIndexList() which is called before this function.
@@ -1059,12 +1060,12 @@ unsafe static class MikkTSpace
         for (f = 0; f < iNrTrianglesIn; f++)
         {
             // initial values
-            Vector3 v1 = GetPosition(pContext, piTriListIn[f * 3 + 0]);
-            Vector3 v2 = GetPosition(pContext, piTriListIn[f * 3 + 1]);
-            Vector3 v3 = GetPosition(pContext, piTriListIn[f * 3 + 2]);
-            Vector3 t1 = GetTexCoord(pContext, piTriListIn[f * 3 + 0]);
-            Vector3 t2 = GetTexCoord(pContext, piTriListIn[f * 3 + 1]);
-            Vector3 t3 = GetTexCoord(pContext, piTriListIn[f * 3 + 2]);
+            Vector3 v1 = GetPosition(context, piTriListIn[f * 3 + 0]);
+            Vector3 v2 = GetPosition(context, piTriListIn[f * 3 + 1]);
+            Vector3 v3 = GetPosition(context, piTriListIn[f * 3 + 2]);
+            Vector3 t1 = GetTexCoord(context, piTriListIn[f * 3 + 0]);
+            Vector3 t2 = GetTexCoord(context, piTriListIn[f * 3 + 1]);
+            Vector3 t3 = GetTexCoord(context, piTriListIn[f * 3 + 2]);
 
             float t21x = t2.X - t1.X;
             float t21y = t2.Y - t1.Y;
@@ -1121,8 +1122,8 @@ unsafe static class MikkTSpace
                         //printf("found quad with bad mapping\n");
                         bool bChooseOrientFirstTri = false;
                         if ((pTriInfos[t + 1].iFlag & GROUP_WITH_ANY) != 0) bChooseOrientFirstTri = true;
-                        else if (CalcTexArea(pContext, &piTriListIn[t * 3 + 0]) >=
-                                 CalcTexArea(pContext, &piTriListIn[(t + 1) * 3 + 0]))
+                        else if (CalcTexArea(context, &piTriListIn[t * 3 + 0]) >=
+                                 CalcTexArea(context, &piTriListIn[(t + 1) * 3 + 0]))
                             bChooseOrientFirstTri = true;
 
                         // force match
@@ -1295,7 +1296,7 @@ unsafe static class MikkTSpace
         ,
         int iNrActiveGroups, int* piTriListIn
         , float fThresCos,
-        SMikkTSpaceContext* pContext)
+        SMikkTSpaceContext context)
     {
         STSpace* pSubGroupTspace = null;
         SSubGroup* pUniSubGroups = null;
@@ -1342,7 +1343,7 @@ unsafe static class MikkTSpace
                 Debug.Assert(iVertIndex == pGroup->iVertexRepresentitive);
 
                 // is normalized already
-                n = GetNormal(pContext, iVertIndex);
+                n = GetNormal(context, iVertIndex);
 
                 // project
                 vOs = vsub(pTriInfos[f].vOs, vscale(vdot(n, pTriInfos[f].vOs), n));
@@ -1421,7 +1422,7 @@ unsafe static class MikkTSpace
                     pUniSubGroups[iUniqueSubGroups].pTriMembers = pIndices;
                     memcpy(pIndices, tmp_group.pTriMembers, iMembers * sizeof(int));
                     pSubGroupTspace[iUniqueSubGroups] =
-                        EvalTspace(tmp_group.pTriMembers, iMembers, piTriListIn, pTriInfos, pContext,
+                        EvalTspace(tmp_group.pTriMembers, iMembers, piTriListIn, pTriInfos, context,
                             pGroup->iVertexRepresentitive);
                     ++iUniqueSubGroups;
                 }
@@ -1467,7 +1468,7 @@ unsafe static class MikkTSpace
         , int iFaces, int* piTriListIn
         , STriInfo* pTriInfos
         ,
-        SMikkTSpaceContext* pContext, int iVertexRepresentitive)
+        SMikkTSpaceContext context, int iVertexRepresentitive)
     {
         STSpace res = new STSpace();
         float fAngleSum = 0;
@@ -1498,7 +1499,7 @@ unsafe static class MikkTSpace
 
                 // project
                 index = piTriListIn[3 * f + i];
-                n = GetNormal(pContext, index);
+                n = GetNormal(context, index);
                 vOs = vsub(pTriInfos[f].vOs, vscale(vdot(n, pTriInfos[f].vOs), n));
                 vOt = vsub(pTriInfos[f].vOt, vscale(vdot(n, pTriInfos[f].vOt), n));
                 if (VNotZero(vOs)) vOs = Normalize(vOs);
@@ -1508,9 +1509,9 @@ unsafe static class MikkTSpace
                 i1 = piTriListIn[3 * f + i];
                 i0 = piTriListIn[3 * f + (i > 0 ? (i - 1) : 2)];
 
-                p0 = GetPosition(pContext, i0);
-                p1 = GetPosition(pContext, i1);
-                p2 = GetPosition(pContext, i2);
+                p0 = GetPosition(context, i0);
+                p1 = GetPosition(context, i1);
+                p2 = GetPosition(context, i2);
                 v1 = vsub(p0, p1);
                 v2 = vsub(p2, p1);
 
@@ -1936,7 +1937,7 @@ unsafe static class MikkTSpace
         Debug.Assert(iNrTrianglesIn == t);
     }
 
-    static void DegenEpilogue(STSpace* psTspace, STriInfo* pTriInfos, int* piTriListIn, SMikkTSpaceContext* pContext,
+    static void DegenEpilogue(STSpace* psTspace, STriInfo* pTriInfos, int* piTriListIn, SMikkTSpaceContext context,
         int iNrTrianglesIn, int iTotTris)
     {
         int t = 0, i = 0;
@@ -1997,13 +1998,13 @@ unsafe static class MikkTSpace
                 else if ((iFlag & 8) == 0) iMissingIndex = 3;
 
                 iOrgF = pTriInfos[t].iOrgFaceNumber;
-                vDstP = GetPosition(pContext, MakeIndex(iOrgF, iMissingIndex));
+                vDstP = GetPosition(context, MakeIndex(iOrgF, iMissingIndex));
                 bNotFound = true;
                 i = 0;
                 while (bNotFound && i < 3)
                 {
                     int iVert = pV[i];
-                    Vector3 vSrcP = GetPosition(pContext, MakeIndex(iOrgF, iVert));
+                    Vector3 vSrcP = GetPosition(context, MakeIndex(iOrgF, iVert));
                     if (veq(vSrcP, vDstP) == true)
                     {
                         int iOffs = pTriInfos[t].iTSpacesOffs;
