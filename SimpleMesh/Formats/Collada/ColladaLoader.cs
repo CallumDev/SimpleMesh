@@ -38,6 +38,9 @@ static class ColladaLoader
 
         var upAxis = Enum.Parse<UpAxisType>(root.Child("asset")?.Child("up_axis")?.Value ?? "Y_UP", true);
 
+        string copyright = root.Child("asset")?.Child("contributor")?.Child("author")?.Value;
+        string generator = root.Child("asset")?.Child("contributor")?.Child("authoring_tool")?.Value;
+        
         var defSceneUri = root.Child("scene")?.Child("instance_visual_scene")?.Attribute("url")?.Value;
         if (string.IsNullOrWhiteSpace(defSceneUri))
             throw new ModelLoadException("Could not determine default scene");
@@ -48,7 +51,7 @@ static class ColladaLoader
             throw new ModelLoadException($"Could not find default scene {defSceneId}");
         }
 
-        var mdl = new Model() { Materials = new() };
+        var mdl = new Model() { Materials = new(), Copyright = copyright, Generator = generator };
 
         var matAccess = new MaterialAccessor(mdl, root.Child("library_materials"), root.Child("library_effects"));
         var geoAccess = new GeometryAccessor(mdl, ctx, upAxis, root.Child("library_geometries"), matAccess);

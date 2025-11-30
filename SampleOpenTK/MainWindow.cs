@@ -154,6 +154,14 @@ namespace SampleOpenTK
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
             openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";
+            if (model.Generator != null)
+            {
+                openfile += $"\nGenerator: {model.Generator}";
+            }
+            if (model.Copyright != null)
+            {
+                openfile += $"\nCopyright: {model.Copyright}";
+            }
             //Unbind vao so we don't delete the active one
             GL.BindVertexArray(0);
             if (vbo != 0)
@@ -452,8 +460,8 @@ namespace SampleOpenTK
                 b.Render(text);
             }
             text.DrawString("Mouse Wheel - Zoom, Keyboard Up/Down/Left/Right - Rotate", 5, sz.Y - 60);
-            if(openfile != null)
-                text.DrawString(openfile, 5, sz.Y - 30);
+            if (openfile != null)
+                text.DrawString(openfile, 5, sz.Y - text.MeasureString(openfile).Y - 90);
             
             text.Finish();
             SwapBuffers();

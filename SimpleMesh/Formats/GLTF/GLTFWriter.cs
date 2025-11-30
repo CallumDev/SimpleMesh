@@ -10,13 +10,17 @@ namespace SimpleMesh.Formats.GLTF;
 
 internal static class GLTFWriter
 {
-    private static JsonNode AssetNode()
+    private static JsonNode AssetNode(string copyright, string generator)
     {
-        return new JsonObject
+        var node = new JsonObject
         {
-            {"generator", "SimpleMesh"},
             {"version", "2.0"}
         };
+        if(copyright != null)
+            node.Add("copyright", copyright);
+        if(generator != null)
+            node.Add("generator", generator);
+        return node;
     }
 
     private static JsonNode FromMaterial(Material src, Dictionary<string, int> textureMap)
@@ -277,7 +281,7 @@ internal static class GLTFWriter
         foreach (var r in model.Roots) WalkNode(r, ctx.NodeIndices);
 
         ctx.Nodes = new JsonObject[ctx.NodeIndices.Count];
-        json.Add("asset", AssetNode());
+        json.Add("asset", AssetNode(model.Copyright, model.Generator));
 
 
         Dictionary<string, int> textureMap = new Dictionary<string, int>();

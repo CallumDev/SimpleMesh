@@ -76,7 +76,18 @@ namespace SimpleMesh.Formats.Obj
                 ReadOnlySpan<char> param;
                 if (ln[0] == '#')
                 {
-                    //do nothing
+                    if (lineNo == 1)
+                    {
+                        ReadOnlySpan<char> generator = ln.Slice(1).Trim();
+                        if (generator.Length > 0)
+                        {
+                            model.Generator = generator.ToString();
+                        }
+                    }
+                    else if (StartsWithOrdinal(ln, "# Copyright: "))
+                    {
+                        model.Copyright = ln.Slice("# Copyright: ".Length).ToString();
+                    }
                 }
                 else if (IsParam(ln, 'v') && GetParam(ln, out param))
                 {

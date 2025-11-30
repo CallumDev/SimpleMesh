@@ -65,6 +65,8 @@ namespace SimpleMesh.Formats.GLTF
         public static Model Load(string json, byte[] binchunk, ModelLoadContext ctx)
         {
             using var jsonObject = JsonDocument.Parse(json);
+            string copyright = null;
+            string generator = null;
             var jsonRoot = jsonObject.RootElement;
             if (!jsonRoot.TryGetProperty("asset", out var assetElement))
                 throw new ModelLoadException("Invalid glTF 2.0 JSON (missing asset element)");
@@ -72,6 +74,10 @@ namespace SimpleMesh.Formats.GLTF
                 throw new ModelLoadException("Invalid glTF 2.0 JSON (missing asset version)");
             if (versionElement.GetString() != "2.0")
                 throw new ModelLoadException("Invalid glTF 2.0 JSON (asset version != 2.0)");
+            if (assetElement.TryGetProperty("copyright", out var copyrightElement))
+                copyright = copyrightElement.GetString();
+            if (assetElement.TryGetProperty("generator", out var generatorElement))
+                generator = generatorElement.GetString();
 
             //Load mesh resources
             if (!jsonRoot.TryGetProperty("buffers", out var buffersElement)) {
@@ -338,7 +344,7 @@ namespace SimpleMesh.Formats.GLTF
 
             List<Geometry> refGeometry = new List<Geometry>();
             List<Material> refMaterial = new List<Material>();
-            var model = new Model();
+            var model = new Model() { Copyright = copyright, Generator = generator };
             model.Roots = new ModelNode[scenes[sceneIndex].Nodes.Count];
             for (int i = 0; i < model.Roots.Length; i++)
                 model.Roots[i] = GetNode(nodes, scenes[sceneIndex].Nodes[i], refGeometry, refMaterial);

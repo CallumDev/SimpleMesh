@@ -282,7 +282,6 @@ static class ColladaWriter
         return collada;
     }
 
-
     public static void Write(Model model, Stream outStream)
     {
         var nowstr = DateTime.UtcNow.ToString("s") + "Z";
@@ -292,8 +291,8 @@ static class ColladaWriter
             new XAttribute("version", "1.4.0"),
             new XElement("asset",
                 new XElement("contributor",
-                    new XElement("author", "SimpleMesh"),
-                    new XElement("authoring_tool", "SimpleMesh")
+                    new XElement("author", model.Copyright ?? "SimpleMesh"),
+                    new XElement("authoring_tool", model.Generator ?? "SimpleMesh")
                     ),
                 new XElement("created", nowstr),
                 new XElement("modified", nowstr)

@@ -18,6 +18,9 @@ namespace SimpleMesh
         public Dictionary<string, ImageData> Images;
         public Animation[] Animations;
 
+        public string Copyright;
+        public string Generator;
+
         public static Model FromStream(Stream stream, IExternalResources resources = null)
         {
             return Autodetect.Load(stream, new ModelLoadContext() { ExternalResources = resources ?? new DisallowedResources() });

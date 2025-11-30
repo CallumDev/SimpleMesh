@@ -16,6 +16,8 @@ namespace SimpleMesh.Formats.SMesh
             stream.WriteByte((byte)'H');
             using var comp = new DeflateStream(stream, CompressionLevel.Optimal);
             using var writer = new BinaryWriter(comp);
+            writer.WriteStringUTF8(model.Copyright);
+            writer.WriteStringUTF8(model.Generator);
             writer.Write7BitEncodedInt(model.Materials.Count);
             foreach (var m in model.Materials.Values)
             {

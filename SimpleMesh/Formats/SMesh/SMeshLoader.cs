@@ -21,6 +21,8 @@ namespace SimpleMesh.Formats.SMesh
             using var comp = new DeflateStream(stream, CompressionMode.Decompress);
             using var reader = new BinaryReader(comp);
             var model = new Model();
+            model.Copyright = reader.ReadStringUTF8();
+            model.Generator = reader.ReadStringUTF8();
             var matCount = reader.Read7BitEncodedInt();
             model.Materials = new Dictionary<string, Material>(matCount);
             for (int i = 0; i < matCount; i++)
