@@ -67,6 +67,22 @@ namespace SimpleMesh.Formats.Obj
             Span<ObjVertex> triangulatedElements = stackalloc ObjVertex[512];
 
             bool isL = false, isF = false;
+
+            void AppendTriangleGroup()
+            {
+                if (lastIndex != currentIndices.Count)
+                {
+                    var tg = new TriangleGroup() {
+                        BaseVertex = currentVertex.BaseVertex,
+                        IndexCount = (currentIndices.Count - lastIndex),
+                        StartIndex = lastIndex,
+                        Material = GetMaterial(currentMaterial ?? "default")
+                    };
+                    currentGroups.Add(tg);
+                    lastIndex = currentIndices.Count;
+                    currentVertex.Chunk();
+                }
+            }
             
             while ((src_line = reader.ReadLine()) != null)
             {
@@ -267,21 +283,11 @@ namespace SimpleMesh.Formats.Obj
                 }
                 else if (IsParam(ln, 'g'))
                 {
-                    if (lastIndex != currentIndices.Count)
-                    {
-                        var tg = new TriangleGroup() {
-                            BaseVertex = currentVertex.BaseVertex,
-                            IndexCount = (currentIndices.Count - lastIndex),
-                            StartIndex = lastIndex,
-                            Material = GetMaterial(currentMaterial ?? "default")
-                        };
-                        currentGroups.Add(tg);
-                        lastIndex = currentIndices.Count;
-                        currentVertex.Chunk();
-                    }
+                    AppendTriangleGroup();
                 }
                 else if (StartsWithOrdinal(ln, "usemtl") && GetParam(ln, out param))
                 {
+                    AppendTriangleGroup();
                     currentMaterial = param.ToString();
                 }
                 else if (StartsWithOrdinal(ln, "mtllib") && GetParam(ln, out param))
@@ -304,16 +310,8 @@ namespace SimpleMesh.Formats.Obj
                 }
                 lineNo++;
             }
-            if (lastIndex != currentIndices.Count)
-            {
-                var tg = new TriangleGroup() {
-                    BaseVertex = 0,
-                    IndexCount = (currentIndices.Count - lastIndex),
-                    StartIndex = lastIndex,
-                    Material = GetMaterial(currentMaterial ?? "default")
-                };
-                currentGroups.Add(tg);
-            }
+
+            AppendTriangleGroup();
             
             if (currentIndices.Count > 0)
             {
@@ -364,7 +362,7 @@ namespace SimpleMesh.Formats.Obj
             if (filename.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
                 filename.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
                 return "image/jpeg";
-            return "";
+            return "application/octet-stream";
         }
         
         static bool ResolveVertex(ref ObjVertex vtx, int lnV, int lnVN, int lnVT)
