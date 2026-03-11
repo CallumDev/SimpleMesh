@@ -105,6 +105,7 @@ namespace SimpleMesh
             }
         }
         
+        
         public Model ApplyRootTransforms(bool translate)
         {
             foreach (var m in Roots) {
@@ -149,6 +150,13 @@ namespace SimpleMesh
                 node.Geometry.CalculateBounds();
             return this;
         }
+        
+        public Model CalculateNormals(bool overwrite = false)
+        {
+            foreach(var n in AllNodes().Where(x => x.Geometry != null))
+                n.Geometry.CalculateNormals(overwrite);
+            return this;
+        }
 
         public unsafe Model CalculateTangents(bool overwrite, bool normalMapped)
         {
@@ -159,7 +167,7 @@ namespace SimpleMesh
                 if (normalMapped && g.Groups.All(x => x.Material?.NormalTexture == null))
                     continue; //Don't calculate tangents on non-normal mapped model
                 g.Attributes |= VertexAttributes.Tangent;
-                TangentGeneration.GenerateMikkTSpace(g);
+                TangentGeneration.GenerateMikkTSpace(g.GetTangentInterface());
             }
             return this;
         }

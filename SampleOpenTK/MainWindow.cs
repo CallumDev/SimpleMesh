@@ -150,7 +150,9 @@ namespace SampleOpenTK
             var sw = Stopwatch.StartNew();
             model = Model.FromFile(filename)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
-                .CalculateTangents(false, true) //Calculate missing tangents
+                .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
+                .CalculateNormals() // Calculate missing normals
+                .CalculateTangents(false, true) // Calculate missing tangents
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
             openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";

@@ -20,6 +20,8 @@ namespace SimpleMesh
             if (is16) return new Indices() {Indices16 = source.Select(x => (ushort) x).ToArray()};
             return new Indices() {Indices32 = source};
         }
+        
+        public uint this[int i] => Indices16 == null ? Indices32[i] : Indices16[i];
 
         public int Length => Indices32?.Length ?? Indices16.Length;
         
