@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Numerics;
@@ -8,45 +9,138 @@ namespace SimpleMesh.Formats.SMesh
 {
     static class SMeshWriter
     {
+        class StringBufferBuilder
+        {
+            private Dictionary<string, int> strings = new();
+            private MemoryStream stream = new();
+            private BinaryWriter streamWriter;
+
+            public StringBufferBuilder()
+            {
+                streamWriter = new BinaryWriter(stream);
+            }
+
+            public void AddString(string str)
+            {
+                if (string.IsNullOrEmpty(str))
+                    return;
+                if (!strings.ContainsKey(str))
+                {
+                    var pos = strings.Count;
+                    strings[str] = pos;
+                    streamWriter.WriteStringUTF8(str);
+                }
+            }
+
+            public void WriteStringPos(BinaryWriter writer, string str)
+            {
+                if (str == null)
+                {
+                    writer.Write7BitEncodedInt(0);
+                }
+                else if (str == "") 
+                {
+                    writer.Write7BitEncodedInt(1);
+                }
+                else
+                {
+                    writer.Write7BitEncodedInt(strings[str] + 2);
+                }
+            }
+
+            public void WriteBuffer(BinaryWriter writer)
+            {
+                writer.Write7BitEncodedInt(strings.Count);
+                writer.Write(stream.ToArray());
+            }
+        }
+
+        static void GetNodeStrings(StringBufferBuilder builder, ModelNode node)
+        {
+            builder.AddString(node.Name);
+            foreach (var kv in node.Properties) {
+                builder.AddString(kv.Key);
+                if(kv.Value.Value is string s)
+                    builder.AddString(s);
+            }
+            foreach (var c in node.Children)
+            {
+                GetNodeStrings(builder, c);
+            }
+        }
+        
         public static void Write(Model model, Stream stream)
         {
             stream.WriteByte((byte)'S');
             stream.WriteByte((byte)'M');
             stream.WriteByte((byte)'S');
             stream.WriteByte((byte)'H');
-            using var comp = new DeflateStream(stream, CompressionLevel.Optimal);
-            using var writer = new BinaryWriter(comp);
-            writer.WriteStringUTF8(model.Copyright);
-            writer.WriteStringUTF8(model.Generator);
+            using var comp = new DeflateStream(stream, CompressionLevel.SmallestSize);
+            var ms = new MemoryStream();
+            var writer = new BinaryWriter(ms);
+
+            var strBuffer = new StringBufferBuilder();
+            strBuffer.AddString(model.Copyright);
+            strBuffer.AddString(model.Generator);
+            foreach (var m in model.Materials.Values)
+            {
+                strBuffer.AddString(m.Name);
+                strBuffer.AddString(m.DiffuseTexture?.Name);
+                strBuffer.AddString(m.EmissiveTexture?.Name);
+                strBuffer.AddString(m.MetallicRoughnessTexture?.Name);
+            }
+            foreach (var geo in model.Geometries)
+            {
+                strBuffer.AddString(geo.Name);
+                foreach (var g in geo.Groups)
+                {
+                    strBuffer.AddString(g.Material?.Name);
+                }
+            }
+            foreach (var n in model.Roots)
+            {
+                GetNodeStrings(strBuffer, n);
+            }
+            if (model.Images != null) {
+                foreach (var kv in model.Images) {
+                    strBuffer.AddString(kv.Key);
+                    strBuffer.AddString(kv.Value.MimeType);
+                }
+            }
+            
+            strBuffer.WriteBuffer(writer);
+
+            strBuffer.WriteStringPos(writer, model.Copyright);
+            strBuffer.WriteStringPos(writer, model.Generator);
             writer.Write7BitEncodedInt(model.Materials.Count);
             foreach (var m in model.Materials.Values)
             {
-                writer.WriteStringUTF8(m.Name);
-                WriteTexInfo(writer, m.DiffuseTexture);
+                strBuffer.WriteStringPos(writer, m.Name);
+                WriteTexInfo(writer, strBuffer, m.DiffuseTexture);
                 writer.Write(m.DiffuseColor);
-                WriteTexInfo(writer, m.EmissiveTexture);
+                WriteTexInfo(writer, strBuffer, m.EmissiveTexture);
                 writer.Write(m.EmissiveColor);
-                WriteTexInfo(writer, m.NormalTexture);
+                WriteTexInfo(writer, strBuffer, m.NormalTexture);
                 writer.Write(m.MetallicRoughness ? (byte)1 : (byte)0);
                 writer.Write(m.MetallicFactor);
                 writer.Write(m.RoughnessFactor);
-                WriteTexInfo(writer, m.MetallicRoughnessTexture);
+                WriteTexInfo(writer, strBuffer, m.MetallicRoughnessTexture);
             }
             writer.Write7BitEncodedInt(model.Geometries.Length);
             foreach (var g in model.Geometries)
             {
-                WriteGeometry(g, writer);
+                WriteGeometry(g, writer, strBuffer);
             }
             writer.Write7BitEncodedInt(model.Roots.Length);
             foreach (var n in model.Roots)
             {
-                WriteNode(n, model.Geometries, writer);
+                WriteNode(n, model.Geometries, writer, strBuffer);
             }
             if (model.Images != null) {
                 writer.Write7BitEncodedInt(1 + model.Images.Count);
                 foreach (var kv in model.Images) {
-                    writer.WriteStringUTF8(kv.Key);
-                    writer.WriteStringUTF8(kv.Value.MimeType);
+                    strBuffer.WriteStringPos(writer, kv.Key);
+                    strBuffer.WriteStringPos(writer, kv.Value.MimeType);
                     writer.Write7BitEncodedInt(kv.Value.Data.Length);
                     writer.Write(kv.Value.Data);
                 }
@@ -61,10 +155,10 @@ namespace SimpleMesh.Formats.SMesh
                 writer.Write7BitEncodedInt(1 + model.Animations.Length);
                 foreach (var anim in model.Animations)
                 {
-                    writer.WriteStringUTF8(anim.Name);
+                    strBuffer.WriteStringPos(writer, anim.Name);
                     writer.Write7BitEncodedInt(anim.Rotations.Length);
                     foreach (var rot in anim.Rotations) {
-                        writer.WriteStringUTF8(rot.Target);
+                        strBuffer.WriteStringPos(writer, rot.Target);
                         writer.Write7BitEncodedInt(rot.Keyframes.Length);
                         foreach (var kf in rot.Keyframes) {
                             writer.Write(kf.Time);
@@ -76,7 +170,7 @@ namespace SimpleMesh.Formats.SMesh
                     }
                     writer.Write7BitEncodedInt(anim.Translations.Length);
                     foreach (var tr in anim.Translations) {
-                        writer.WriteStringUTF8(tr.Target);
+                        strBuffer.WriteStringPos(writer, tr.Target);
                         writer.Write7BitEncodedInt(tr.Keyframes.Length);
                         foreach (var kf in tr.Keyframes) {
                             writer.Write(kf.Time);
@@ -91,28 +185,31 @@ namespace SimpleMesh.Formats.SMesh
             {
                 writer.Write7BitEncodedInt(0);
             }
+
+            ms.Position = 0;
+            ms.CopyTo(comp);
         }
 
-        static void WriteTexInfo(BinaryWriter writer, TextureInfo tex)
+        static void WriteTexInfo(BinaryWriter writer, StringBufferBuilder strBuffer, TextureInfo tex)
         {
             if (tex?.Name == null)
             {
-                writer.WriteStringUTF8(null);
+                strBuffer.WriteStringPos(writer, null);
             }
             else
             {
-                writer.WriteStringUTF8(tex.Name);
+                strBuffer.WriteStringPos(writer, tex.Name);
                 writer.Write((byte)tex.CoordinateIndex);
             }
         }
 
-        static void WriteProperty(PropertyValue prop, BinaryWriter writer)
+        static void WriteProperty(PropertyValue prop, StringBufferBuilder strBuffer, BinaryWriter writer)
         {
             switch (prop.Value)
             {
                 case string s:
                     writer.Write((byte)PropertyKind.String);
-                    writer.WriteStringUTF8(s);
+                    strBuffer.WriteStringPos(writer, s);
                     break;
                 case int i:
                     writer.Write((byte)PropertyKind.Int);
@@ -145,13 +242,13 @@ namespace SimpleMesh.Formats.SMesh
             }
         }
 
-        static void WriteNode(ModelNode n, Geometry[] geometries, BinaryWriter writer)
+        static void WriteNode(ModelNode n, Geometry[] geometries, BinaryWriter writer, StringBufferBuilder strBuffer)
         {
-            writer.WriteStringUTF8(n.Name);
+            strBuffer.WriteStringPos(writer, n.Name);
             writer.Write7BitEncodedInt(n.Properties.Count);
             foreach (var kv in n.Properties) {
-                writer.WriteStringUTF8(kv.Key);
-                WriteProperty(kv.Value, writer);
+                strBuffer.WriteStringPos(writer, kv.Key);
+                WriteProperty(kv.Value, strBuffer, writer);
             }
             if (n.Transform == Matrix4x4.Identity) {
                 writer.Write((byte)0);
@@ -181,14 +278,15 @@ namespace SimpleMesh.Formats.SMesh
                 }
             }
             writer.Write7BitEncodedInt(n.Children.Count);
-            foreach (var child in n.Children) {
-                WriteNode(child, geometries, writer);
+            foreach (var child in n.Children)
+            {
+                WriteNode(child, geometries, writer, strBuffer);
             }
         }
 
-        static void WriteGeometry(Geometry g, BinaryWriter writer)
+        static void WriteGeometry(Geometry g, BinaryWriter writer, StringBufferBuilder strBuffer)
         {
-            writer.WriteStringUTF8(g.Name);
+            strBuffer.WriteStringPos(writer, g.Name);
             writer.Write((byte)g.Kind);
             writer.Write((ushort)g.Attributes);
             writer.Write(g.Center);
@@ -201,26 +299,73 @@ namespace SimpleMesh.Formats.SMesh
                 writer.Write(tg.BaseVertex);
                 writer.Write(tg.StartIndex);
                 writer.Write(tg.IndexCount);
-                writer.WriteStringUTF8(tg.Material.Name);
+                strBuffer.WriteStringPos(writer, tg.Material.Name);
             }
             writer.Write7BitEncodedInt(g.Vertices.Length);
-            foreach (var v in g.Vertices) {
-                writer.Write(v.Position);
-                if((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
-                    writer.Write(v.Normal);
-                if((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
-                    writer.Write(v.Diffuse);
-                if((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
-                    writer.Write(v.Tangent);
-                if((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
-                    writer.Write(v.Texture1);
-                if((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
-                    writer.Write(v.Texture2);
-                if((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
-                    writer.Write(v.Texture3);
-                if((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
-                    writer.Write(v.Texture4);
+            int channels = 3;
+            if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
+                channels += 3;
+            if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
+                channels += 4;
+            if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+                channels += 4;
+            if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
+                channels += 2;
+            if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
+                channels += 2;
+            if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+                channels += 2;
+            if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+                channels += 2;
+            FloatBuffer f = new FloatBuffer(channels, g.Vertices.Length);
+            for(int i = 0; i < g.Vertices.Length; i++)
+            {
+                f.SetFloat(g.Vertices[i].Position.X, 0, i);
+                f.SetFloat(g.Vertices[i].Position.Y, 1, i);
+                f.SetFloat(g.Vertices[i].Position.Z, 2, i);
+                int c = 3;
+                if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
+                {
+                    f.SetFloat(g.Vertices[i].Normal.X, c++, i);
+                    f.SetFloat(g.Vertices[i].Normal.Y, c++, i);
+                    f.SetFloat(g.Vertices[i].Normal.Z, c++, i);
+                }
+                if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
+                {
+                    f.SetFloat(g.Vertices[i].Diffuse.R, c++, i);
+                    f.SetFloat(g.Vertices[i].Diffuse.G, c++, i);
+                    f.SetFloat(g.Vertices[i].Diffuse.B, c++, i);
+                    f.SetFloat(g.Vertices[i].Diffuse.A, c++, i);
+                }
+                if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+                {
+                    f.SetFloat(g.Vertices[i].Tangent.X, c++, i);
+                    f.SetFloat(g.Vertices[i].Tangent.Y, c++, i);
+                    f.SetFloat(g.Vertices[i].Tangent.Z, c++, i);
+                    f.SetFloat(g.Vertices[i].Tangent.W, c++, i);
+                }
+                if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
+                {
+                    f.SetFloat(g.Vertices[i].Texture1.X, c++, i);
+                    f.SetFloat(g.Vertices[i].Texture1.Y, c++, i);
+                }
+                if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
+                {
+                    f.SetFloat(g.Vertices[i].Texture2.X, c++, i);
+                    f.SetFloat(g.Vertices[i].Texture2.Y, c++, i);
+                }
+                if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+                {
+                    f.SetFloat(g.Vertices[i].Texture3.X, c++, i);
+                    f.SetFloat(g.Vertices[i].Texture3.Y, c++, i);
+                }
+                if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+                {
+                    f.SetFloat(g.Vertices[i].Texture4.X, c++, i);
+                    f.SetFloat(g.Vertices[i].Texture4.Y, c++, i);
+                }
             }
+            f.Write(writer);
             if (g.Indices.Indices16 != null) {
                 writer.Write((byte)0);
                 IndexCoding.Encode16(g.Indices.Indices16, writer);

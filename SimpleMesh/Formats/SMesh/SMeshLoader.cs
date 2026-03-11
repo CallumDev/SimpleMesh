@@ -8,6 +8,15 @@ namespace SimpleMesh.Formats.SMesh
 {
     public class SMeshLoader
     {
+
+        static string GetString(BinaryReader reader, string[] strings)
+        {
+            var i = reader.Read7BitEncodedInt();
+            if (i == 0) return null;
+            if (i == 1) return "";
+            return strings[i - 2];
+        }
+        
         public static Model Load(Stream stream, ModelLoadContext ctx)
         {
             byte[] magic = new byte[4];
@@ -21,36 +30,41 @@ namespace SimpleMesh.Formats.SMesh
             using var comp = new DeflateStream(stream, CompressionMode.Decompress);
             using var reader = new BinaryReader(comp);
             var model = new Model();
-            model.Copyright = reader.ReadStringUTF8();
-            model.Generator = reader.ReadStringUTF8();
+            var strCount = reader.Read7BitEncodedInt();
+            var strings = new string[strCount];
+            for (int i = 0; i < strings.Length; i++)
+                strings[i] = reader.ReadStringUTF8();
+            
+            model.Copyright = GetString(reader, strings);
+            model.Generator = GetString(reader, strings);
             var matCount = reader.Read7BitEncodedInt();
             model.Materials = new Dictionary<string, Material>(matCount);
             for (int i = 0; i < matCount; i++)
             {
                 var mat = new Material()
                 {
-                    Name = reader.ReadStringUTF8(),
-                    DiffuseTexture = ReadTexInfo(reader),
+                    Name = GetString(reader, strings),
+                    DiffuseTexture = ReadTexInfo(reader, strings),
                     DiffuseColor = reader.ReadLinearColor(),
-                    EmissiveTexture = ReadTexInfo(reader),
+                    EmissiveTexture = ReadTexInfo(reader, strings),
                     EmissiveColor = reader.ReadVector3(),
-                    NormalTexture = ReadTexInfo(reader),
+                    NormalTexture = ReadTexInfo(reader, strings),
                     MetallicRoughness = reader.ReadByte() != 0,
                     MetallicFactor = reader.ReadSingle(),
                     RoughnessFactor = reader.ReadSingle(),
-                    MetallicRoughnessTexture = ReadTexInfo(reader),
+                    MetallicRoughnessTexture = ReadTexInfo(reader, strings),
                 };
                 model.Materials.Add(mat.Name, mat);
             }
             model.Geometries = new Geometry[reader.Read7BitEncodedInt()];
             for (int i = 0; i < model.Geometries.Length; i++)
             {
-                model.Geometries[i] = ReadGeometry(reader, model.Materials);
+                model.Geometries[i] = ReadGeometry(reader, model.Materials, strings);
             }
             model.Roots = new ModelNode[reader.Read7BitEncodedInt()];
             for (int i = 0; i < model.Roots.Length; i++)
             {
-                model.Roots[i] = ReadNode(reader, model.Geometries, model.Materials);
+                model.Roots[i] = ReadNode(reader, model.Geometries, model.Materials, strings);
             }
             var imageCount = reader.Read7BitEncodedInt();
             if (imageCount != 0)
@@ -59,8 +73,8 @@ namespace SimpleMesh.Formats.SMesh
                 model.Images = new Dictionary<string, ImageData>();
                 for (int i = 0; i < imageCount; i++)
                 {
-                    var name = reader.ReadStringUTF8();
-                    var mime = reader.ReadStringUTF8();
+                    var name = GetString(reader, strings);
+                    var mime = GetString(reader, strings);
                     var len = reader.Read7BitEncodedInt();
                     var data = reader.ReadBytes(len);
                     model.Images[name] = new ImageData(name, data, mime);
@@ -74,12 +88,12 @@ namespace SimpleMesh.Formats.SMesh
                 for (int i = 0; i < animationCount; i++)
                 {
                     var anm = new Animation();
-                    anm.Name = reader.ReadStringUTF8();
+                    anm.Name = GetString(reader, strings);
                     anm.Rotations = new RotationChannel[reader.Read7BitEncodedInt()];
                     for (int j = 0; j < anm.Rotations.Length; j++)
                     {
                         var r = new RotationChannel();
-                        r.Target = reader.ReadStringUTF8();
+                        r.Target = GetString(reader, strings);
                         r.Keyframes = new RotationKeyframe[reader.Read7BitEncodedInt()];
                         for (int k = 0; k < r.Keyframes.Length; k++)
                         {
@@ -94,7 +108,7 @@ namespace SimpleMesh.Formats.SMesh
                     for (int j = 0; j < anm.Translations.Length; j++)
                     {
                         var t = new TranslationChannel();
-                        t.Target = reader.ReadStringUTF8();
+                        t.Target = GetString(reader, strings);
                         t.Keyframes = new TranslationKeyframe[reader.Read7BitEncodedInt()];
                         for (int k = 0; k < t.Keyframes.Length; k++)
                         {
@@ -109,14 +123,14 @@ namespace SimpleMesh.Formats.SMesh
             return model;
         }
 
-        static TextureInfo ReadTexInfo(BinaryReader reader)
+        static TextureInfo ReadTexInfo(BinaryReader reader, string[] strings)
         {
-            var name = reader.ReadStringUTF8();
+            var name = GetString(reader, strings);
             if (name == null) return null;
             return new TextureInfo(name, reader.ReadByte());
         }
 
-        static PropertyValue ReadProperty(BinaryReader reader)
+        static PropertyValue ReadProperty(BinaryReader reader, string[] strings)
         {
             var d = reader.ReadByte();
             switch ((PropertyKind)(d & 0x7F)) {
@@ -135,7 +149,7 @@ namespace SimpleMesh.Formats.SMesh
                     for (int i = 0; i < ia.Length; i++) ia[i] = reader.ReadInt32();
                     return new PropertyValue(ia);
                 case PropertyKind.String:
-                    return new PropertyValue(reader.ReadStringUTF8());
+                    return new PropertyValue(GetString(reader, strings));
                 case PropertyKind.Vector3:
                     return new PropertyValue(reader.ReadVector3());
                 default:
@@ -143,15 +157,15 @@ namespace SimpleMesh.Formats.SMesh
             }
         }
 
-        static ModelNode ReadNode(BinaryReader reader, Geometry[] geometries, Dictionary<string, Material> mats)
+        static ModelNode ReadNode(BinaryReader reader, Geometry[] geometries, Dictionary<string, Material> mats, string[] strings)
         {
             var node = new ModelNode();
-            node.Name = reader.ReadStringUTF8();
+            node.Name = GetString(reader, strings);
             int propCount = reader.Read7BitEncodedInt();
             node.Properties = new Dictionary<string, PropertyValue>(propCount);
             for (int i = 0; i < propCount; i++)
             {
-                node.Properties[reader.ReadStringUTF8()] = ReadProperty(reader);
+                node.Properties[GetString(reader, strings)] = ReadProperty(reader, strings);
             }
             var tr = reader.ReadByte();
             if (tr != 0) node.Transform = reader.ReadMatrix4x4();
@@ -163,14 +177,14 @@ namespace SimpleMesh.Formats.SMesh
             var childCount = reader.Read7BitEncodedInt();
             node.Children = new List<ModelNode>(childCount);
             for(int i = 0; i < childCount; i++)
-                node.Children.Add(ReadNode(reader, geometries, mats));
+                node.Children.Add(ReadNode(reader, geometries, mats, strings));
             return node;
         }
 
-        static Geometry ReadGeometry(BinaryReader reader, Dictionary<string, Material> mats)
+        static Geometry ReadGeometry(BinaryReader reader, Dictionary<string, Material> mats, string[] strings)
         {
             var g = new Geometry();
-            g.Name = reader.ReadStringUTF8();
+            g.Name = GetString(reader, strings);
             g.Kind = (GeometryKind) reader.ReadByte();
             g.Attributes = (VertexAttributes) reader.ReadUInt16();
             g.Center = reader.ReadVector3();
@@ -186,31 +200,82 @@ namespace SimpleMesh.Formats.SMesh
                     StartIndex = reader.ReadInt32(),
                     IndexCount = reader.ReadInt32()
                 };
-                var matname = reader.ReadStringUTF8();
+                var matname = GetString(reader, strings);
                 if (!mats.TryGetValue(matname, out g.Groups[i].Material)) {
                     throw new ModelLoadException($"Undefined material referenced `{matname}`");
                 }
             }
             g.Vertices = new Vertex[reader.Read7BitEncodedInt()];
+            int channels = 3;
+            if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
+                channels += 3;
+            if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
+                channels += 4;
+            if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+                channels += 4;
+            if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
+                channels += 2;
+            if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
+                channels += 2;
+            if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+                channels += 2;
+            if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+                channels += 2;
+            var f = new FloatBuffer(channels, g.Vertices.Length);
+            f.Read(reader);
             for (int i = 0; i < g.Vertices.Length; i++)
             {
-                g.Vertices[i].Position = reader.ReadVector3();
+                g.Vertices[i].Position = new(
+                    f.GetFloat(0, i),
+                    f.GetFloat(1, i),
+                    f.GetFloat(2, i)
+                );
+                int c = 3;
                 if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
-                    g.Vertices[i].Normal = reader.ReadVector3();
+                {
+                    g.Vertices[i].Normal = new(
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i));
+                }
                 if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
-                    g.Vertices[i].Diffuse = reader.ReadLinearColor();
+                {
+                    g.Vertices[i].Diffuse = new(
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i)
+                    );
+                }
                 else
+                {
                     g.Vertices[i].Diffuse = LinearColor.White;
+                }
                 if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
-                    g.Vertices[i].Tangent = reader.ReadVector4();
+                {
+                    g.Vertices[i].Tangent = new(
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i),
+                        f.GetFloat(c++, i)
+                    );
+                }
                 if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
-                    g.Vertices[i].Texture1 = reader.ReadVector2();
+                {
+                    g.Vertices[i].Texture1 = new(f.GetFloat(c++, i), f.GetFloat(c++, i));
+                }
                 if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
-                    g.Vertices[i].Texture2 = reader.ReadVector2();
+                {
+                    g.Vertices[i].Texture2 = new(f.GetFloat(c++, i), f.GetFloat(c++, i));
+                }
                 if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
-                    g.Vertices[i].Texture3 = reader.ReadVector2();
+                {
+                    g.Vertices[i].Texture3 = new(f.GetFloat(c++, i), f.GetFloat(c++, i));
+                }
                 if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
-                    g.Vertices[i].Texture4 = reader.ReadVector2();
+                {
+                    g.Vertices[i].Texture4 = new(f.GetFloat(c++, i), f.GetFloat(c++, i));
+                }
             }
 
             var indexType = reader.ReadByte();
