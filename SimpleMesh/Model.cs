@@ -162,12 +162,9 @@ namespace SimpleMesh
         {
             foreach (var g in Geometries)
             {
-                if (!overwrite & ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent))
-                    continue; //Tangents already exist
                 if (normalMapped && g.Groups.All(x => x.Material?.NormalTexture == null))
                     continue; //Don't calculate tangents on non-normal mapped model
-                g.Attributes |= VertexAttributes.Tangent;
-                TangentGeneration.GenerateMikkTSpace(g.GetTangentInterface());
+                g.CalculateTangents(overwrite);
             }
             return this;
         }

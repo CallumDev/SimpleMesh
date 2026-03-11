@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace SimpleMesh;
 
+/// <summary>
+/// Represents a mesh made up of unwelded (no index buffer!) faces
+/// </summary>
 public interface ITangentGeometry
 {
     int GetNumFaces();
@@ -11,6 +14,10 @@ public interface ITangentGeometry
     Vector2 GetTexCoord(int faceIndex, int faceVertex);
     void SetTangent(Vector4 tangent, int faceIndex, int faceVertex);
 }
+
+/// <summary>
+/// MikkTSpace tangent implementation. For generating tangents on SimpleMesh models, use Model.CalculateTangents() or Geometry.CalculateTangents()
+/// </summary>
 
 public static class TangentGeneration
 {

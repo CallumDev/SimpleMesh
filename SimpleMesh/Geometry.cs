@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
@@ -51,10 +52,86 @@ namespace SimpleMesh
                 Vector3.Distance(Center, Max)
             );
         }
+
+        class UnweldedTriangles : ITangentGeometry
+        {
+            public record struct UnweldedGroup(int StartVertex, int VertexCount);
+
+            public Vertex[] Vertices;
+            public UnweldedGroup[] Groups;
+
+            public UnweldedTriangles(Geometry g)
+            {
+                Groups = new UnweldedGroup[g.Groups.Length];
+                int count = 0;
+                for (int i = 0; i < g.Groups.Length; i++)
+                {
+                    Groups[i] = new(count, g.Groups[i].IndexCount);
+                    count += g.Groups[i].IndexCount;
+                }
+
+                Vertices = new Vertex[count];
+                int vtx = 0;
+                for (int i = 0; i < g.Groups.Length; i++)
+                {
+                    for (int j = 0; j < g.Groups[i].IndexCount; j++)
+                    {
+                        var idx = g.Indices[g.Groups[i].StartIndex + j] + g.Groups[i].BaseVertex;
+                        Vertices[vtx++] = g.Vertices[idx];
+                    }
+                }
+            }
+
+            public int GetNumFaces() => Vertices.Length / 3;
+
+            public int GetNumVerticesOfFace(int index) => 3;
+            
+            int Index(int faceIndex, int faceVertex) => faceIndex * 3 + faceVertex;
+
+            public Vector3 GetPosition(int faceIndex, int faceVertex) =>
+                Vertices[Index(faceIndex, faceVertex)].Position;
+
+            public Vector3 GetNormal(int faceIndex, int faceVertex) =>
+                Vertices[Index(faceIndex, faceVertex)].Normal;
+
+            public Vector2 GetTexCoord(int faceIndex, int faceVertex) =>
+                Vertices[Index(faceIndex, faceVertex)].Texture1;
+
+            public void SetTangent(Vector4 tangent, int faceIndex, int faceVertex) => 
+                Vertices[Index(faceIndex, faceVertex)].Tangent = tangent;
+        }
+        
+        public void CalculateTangents(bool overwrite = false)
+        {
+            if ((Has(VertexAttributes.Tangent) & !overwrite) || Kind == GeometryKind.Lines)
+                return;
+            var unwelded = new UnweldedTriangles(this);
+            TangentGeneration.GenerateMikkTSpace(unwelded);
+
+            List<uint> indexArray = new();
+            int startIndex = 0;
+            var vb = new VertexBufferBuilder(Attributes | VertexAttributes.Tangent);
+
+            for (int i = 0; i < Groups.Length; i++)
+            {
+                for (int j = 0; j < unwelded.Groups[i].VertexCount; j++)
+                {
+                    var idx = vb.Add(ref unwelded.Vertices[j + unwelded.Groups[i].StartVertex]) -
+                              vb.BaseVertex;
+                    indexArray.Add((uint)idx);
+                }
+                Groups[i].StartIndex = startIndex;
+                Groups[i].IndexCount = indexArray.Count - startIndex;
+                Groups[i].BaseVertex = vb.BaseVertex;
+                vb.Chunk();
+            }
+            Indices = Indices.FromBuffer(indexArray.ToArray());
+            Vertices = vb.GetVertices();
+        }
         
         public void CalculateNormals(bool overwrite = false)
         {
-            if (Has(VertexAttributes.Normal) && !overwrite)
+            if ((Has(VertexAttributes.Normal) && !overwrite) || Kind == GeometryKind.Lines)
                 return;
 
             for (int i = 0; i < Vertices.Length; i++)
@@ -117,94 +194,6 @@ namespace SimpleMesh
 
         internal bool Has(VertexAttributes attributes) =>
             (Attributes & attributes) == attributes;
-
-        public ITangentGeometry GetTangentInterface()
-        {
-            if (Indices == null || Groups.All(x => x.BaseVertex == 0))
-                return new FlatTangentAccessor(this);
-            return new TriGroupTangentAccessor(this);
-        }
-
-        class FlatTangentAccessor(Geometry g) : TangentAccessor(g)
-        {
-            public override int GetNumFaces() => g.Indices == null ? g.Vertices.Length / 3 : g.Indices.Length / 3;
-            protected override int GetIndex(int iFace, int iVert) => g.Indices == null 
-                ? (iFace * 3) + iVert : (int)g.Indices[(iFace * 3) + iVert];
-        }
-
-        class TriGroupTangentAccessor : TangentAccessor
-        {
-            private int[] starts;
-            private int indexCount;
-
-            private int grp = 0;
-            
-            private Geometry geometry;
-
-            public TriGroupTangentAccessor(Geometry g) : base(g)
-            {
-                geometry = g;
-                starts = new int[g.Groups.Length];
-                int count = 0;
-                for (int i = 0; i < g.Groups.Length; i++)
-                {
-                    starts[i] = count;
-                    count += g.Groups[i].IndexCount;
-                }
-
-                indexCount = count;
-            }
-            
-            public override int GetNumFaces() => indexCount / 3;
-
-            protected override int GetIndex(int iFace, int iVert)
-            {
-                int x = (iFace * 3) + iVert;
-                int grp = FindGroup(x);
-                int local = x - starts[grp];
-
-                return (int)(
-                    geometry.Indices[geometry.Groups[grp].StartIndex + local] +
-                    geometry.Groups[grp].BaseVertex
-                );
-            }
-
-            int FindGroup(int x)
-            {
-                int lo = 0;
-                int hi = starts.Length - 1;
-
-                while (lo <= hi)
-                {
-                    int mid = (lo + hi) >> 1;
-
-                    if (x < starts[mid])
-                        hi = mid - 1;
-                    else if (mid + 1 < starts.Length && x >= starts[mid + 1])
-                        lo = mid + 1;
-                    else
-                        return mid;
-                }
-
-                return starts.Length - 1;
-            }
-        }
-
-        abstract class TangentAccessor(Geometry g) : ITangentGeometry
-        {
-            protected abstract int GetIndex(int iFace, int iVert);
-            
-            public int GetNumVerticesOfFace(int index) => 3;
-
-            public abstract int GetNumFaces();
-
-            public Vector3 GetPosition(int faceIndex, int faceVertex) => g.Vertices[GetIndex(faceIndex, faceVertex)].Position;
-
-            public Vector3 GetNormal(int faceIndex, int faceVertex) => g.Vertices[GetIndex(faceIndex, faceVertex)].Normal;
-
-            public Vector2 GetTexCoord(int faceIndex, int faceVertex) => g.Vertices[GetIndex(faceIndex, faceVertex)].Texture1;
-
-            public void SetTangent(Vector4 tangent, int faceIndex, int faceVertex) => g.Vertices[GetIndex(faceIndex, faceVertex)].Tangent = tangent;
-        }
+        
     }
 }
