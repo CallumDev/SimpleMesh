@@ -51,45 +51,44 @@ static class ColladaWriter
     static XElement SrcParam(string name) =>
         new("param", new XAttribute("name", name), new XAttribute("type", "float"));
 
-    static XElement Vec3Source(string name, IEnumerable<Vector3> vectors)
+    static XElement Vec3Source(string name, VertexArray.Accessor<Vector3> vectors)
     {
         var fltArray = new StringBuilder();
-        int count = 0;
-        foreach (var v in vectors)
+        for (int i = 0; i < vectors.Count; i++)
         {
-            if (count > 0) fltArray.Append(" ");
+            var v = vectors[i];
+            if (i > 0) fltArray.Append(" ");
             fltArray.Append(FloatStr(v.X))
                 .Append(" ")
                 .Append(FloatStr(v.Y))
                 .Append(" ")
                 .Append(FloatStr(v.Z));
-            count++;
         }
         
         return new XElement("source",
             new XAttribute("id", name),
             new XElement("float_array",
                 new XAttribute("id", $"{name}-array"),
-                new XAttribute("count", count * 3),
+                new XAttribute("count", vectors.Count * 3),
                 fltArray),
             new XElement("technique_common",
                 new XElement("accessor",
                     new XAttribute("source", $"#{name}-array"),
-                    new XAttribute("count", count),
+                    new XAttribute("count", vectors.Count),
                     new XAttribute("stride", "3"),
                     SrcParam("X"),
                     SrcParam("Y"),
                     SrcParam("Z"))));
     }
     
-    static XElement ColorSource(string name, IEnumerable<LinearColor> vectors)
+    static XElement ColorSource(string name, VertexArray.Accessor<LinearColor> vectors)
     {
         var fltArray = new StringBuilder();
-        int count = 0;
-        foreach (var v in vectors)
+        for(int i = 0; i < vectors.Count; i++)
         {
+            var v = vectors[i];
             var c = v.ToSrgb();
-            if (count > 0) fltArray.Append(" ");
+            if (i > 0) fltArray.Append(" ");
             fltArray.Append(FloatStr(c.X))
                 .Append(" ")
                 .Append(FloatStr(c.Y))
@@ -97,19 +96,18 @@ static class ColladaWriter
                 .Append(FloatStr(c.Z))
                 .Append(" ")
                 .Append(FloatStr(c.W));
-            count++;
         }
         
         return new XElement("source",
             new XAttribute("id", name),
             new XElement("float_array",
                 new XAttribute("id", $"{name}-array"),
-                new XAttribute("count", count * 4),
+                new XAttribute("count", vectors.Count * 4),
                 fltArray),
             new XElement("technique_common",
                 new XElement("accessor",
                     new XAttribute("source", $"#{name}-array"),
-                    new XAttribute("count", count),
+                    new XAttribute("count", vectors.Count),
                     new XAttribute("stride", "4"),
                     SrcParam("R"),
                     SrcParam("G"),
@@ -117,30 +115,29 @@ static class ColladaWriter
                     SrcParam("A"))));
     }
     
-    static XElement TexCoordSource(string name, IEnumerable<Vector2> vectors)
+    static XElement TexCoordSource(string name, VertexArray.Accessor<Vector2> vectors)
     {
         var fltArray = new StringBuilder();
-        int count = 0;
 
-        foreach (var v in vectors)
+        for(int i = 0; i < vectors.Count; i++)
         {
-            if (count > 0) fltArray.Append(" ");
+            var v = vectors[i];
+            if (i > 0) fltArray.Append(" ");
             fltArray.Append(FloatStr(v.X))
                 .Append(" ")
                 .Append(FloatStr(1 - v.Y));
-            count++;
         }
         
         return new XElement("source",
             new XAttribute("id", name),
             new XElement("float_array",
                 new XAttribute("id", $"{name}-array"),
-                new XAttribute("count", count * 2),
+                new XAttribute("count", vectors.Count * 2),
                 fltArray),
             new XElement("technique_common",
                 new XElement("accessor",
                     new XAttribute("source", $"#{name}-array"),
-                    new XAttribute("count", count),
+                    new XAttribute("count", vectors.Count),
                     new XAttribute("stride", "2"),
                     SrcParam("U"),
                     SrcParam("V"))));
@@ -163,21 +160,21 @@ static class ColladaWriter
     {
         string id = $"{name}-mesh";
         var mesh = new XElement("mesh");
-        
-        mesh.Add(Vec3Source($"{id}-positions", geo.Vertices.Select(x => x.Position)));
+
+        mesh.Add(Vec3Source($"{id}-positions", geo.Vertices.Position));
         
         if (geo.Has(VertexAttributes.Normal))
-            mesh.Add(Vec3Source($"{id}-normals", geo.Vertices.Select(x => x.Normal)));
+            mesh.Add(Vec3Source($"{id}-normals", geo.Vertices.Normal));
         if(geo.Has(VertexAttributes.Diffuse))
-            mesh.Add(ColorSource($"{id}-diffuse", geo.Vertices.Select(x => x.Diffuse)));
+            mesh.Add(ColorSource($"{id}-diffuse", geo.Vertices.Diffuse));
         if (geo.Has(VertexAttributes.Texture1))
-            mesh.Add(TexCoordSource($"{id}-tex1", geo.Vertices.Select(x => x.Texture1)));
+            mesh.Add(TexCoordSource($"{id}-tex1", geo.Vertices.Texture1));
         if (geo.Has(VertexAttributes.Texture2))
-            mesh.Add(TexCoordSource($"{id}-tex2", geo.Vertices.Select(x => x.Texture2)));
+            mesh.Add(TexCoordSource($"{id}-tex2", geo.Vertices.Texture2));
         if (geo.Has(VertexAttributes.Texture3))
-            mesh.Add(TexCoordSource($"{id}-tex3", geo.Vertices.Select(x => x.Texture3)));
+            mesh.Add(TexCoordSource($"{id}-tex3", geo.Vertices.Texture3));
         if (geo.Has(VertexAttributes.Texture4))
-            mesh.Add(TexCoordSource($"{id}-tex4", geo.Vertices.Select(x => x.Texture4)));
+            mesh.Add(TexCoordSource($"{id}-tex4", geo.Vertices.Texture4));
 
         mesh.Add(new XElement("vertices",
             new XAttribute("id", $"{id}-vertices"),

@@ -280,6 +280,8 @@ namespace SimpleMesh.Formats.GLTF
                     nodes[k].Name = nameElement.GetString();
                 if (n.TryGetProperty("mesh", out var meshElement))
                     nodes[k].Geometry = meshes[meshElement.GetInt32()];
+                if (n.TryGetProperty("skin", out var skinElem))
+                    nodes[k].Skin = skinElem.GetInt32();
                 Vector3 translation = Vector3.Zero;
                 Vector3 scale = Vector3.One;
                 Quaternion rotation = Quaternion.Identity;
@@ -330,6 +332,41 @@ namespace SimpleMesh.Formats.GLTF
                 sceneIndex = sceneElement.GetInt32();
             }
 
+            GLTFSkin[] skinarray = [];
+            Skin?[] allSkins = [];
+            k = 0;
+            if (jsonRoot.TryGetProperty("skins", out var skinsElement))
+            {
+                skinarray = new GLTFSkin[skinsElement.GetArrayLength()];
+                allSkins = new Skin[skinarray.Length];
+                foreach (var obj in skinsElement.EnumerateArray())
+                {
+                    var s = new GLTFSkin() { Name = $"skin{k}" };
+                    if (obj.TryGetProperty("name", out var nameElement))
+                        s.Name = nameElement.GetString() ?? $"skin{k}";
+                    if(obj.TryGetProperty("skeleton", out var skeletonElement))
+                        s.Skeleton = skeletonElement.GetInt32();
+                    if (obj.TryGetProperty("joints", out var jointsElement))
+                    {
+                        foreach(var j in jointsElement.EnumerateArray())
+                            s.Joints.Add(j.GetInt32());
+                    }
+                    s.InverseBindMatrices = new Matrix4x4[s.Joints.Count];
+                    if (obj.TryGetProperty("inverseBindMatrices", out var inv))
+                    {
+                        var accessor = accessors[inv.GetInt32()];
+                        for (int i = 0; i < s.InverseBindMatrices.Length; i++)
+                            s.InverseBindMatrices[i] = accessor.GetMatrix4x4(i);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < s.InverseBindMatrices.Length; i++)
+                            s.InverseBindMatrices[i] = Matrix4x4.Identity;
+                    }
+                    skinarray[k++] = s;
+                }
+            }
+            
             Animation[] animarray = null;
             if (jsonRoot.TryGetProperty("animations", out var animationsElement))
             {
@@ -342,13 +379,31 @@ namespace SimpleMesh.Formats.GLTF
                 animarray = anims.ToArray();
             }
 
+            ModelNode[] concreteNodes = new ModelNode[nodes.Length];
+            
             List<Geometry> refGeometry = new List<Geometry>();
             List<Material> refMaterial = new List<Material>();
             var model = new Model() { Copyright = copyright, Generator = generator };
             model.Roots = new ModelNode[scenes[sceneIndex].Nodes.Count];
             for (int i = 0; i < model.Roots.Length; i++)
-                model.Roots[i] = GetNode(nodes, scenes[sceneIndex].Nodes[i], refGeometry, refMaterial);
+            {
+                model.Roots[i] = GetNode(nodes, scenes[sceneIndex].Nodes[i], refGeometry, refMaterial, concreteNodes,
+                    skinarray, allSkins);
+            }
+            for (int i = 0; i < allSkins.Length; i++)
+            {
+                if (allSkins[i] == null)
+                    continue;
+                if (skinarray[i].Skeleton != null)
+                    allSkins[i].Root = concreteNodes[skinarray[i].Skeleton.Value];
+                allSkins[i].Bones = new ModelNode[allSkins[i].InverseBindMatrices.Length];
+                for (int j = 0; j < allSkins[i].Bones.Length; j++)
+                {
+                    allSkins[i].Bones[j] = concreteNodes[skinarray[i].Joints[j]];
+                }
+            }
             model.Geometries = refGeometry.ToArray();
+            model.Skins = allSkins.Where(x => x != null).ToArray();
             model.Materials = new Dictionary<string, Material>();
             foreach (var mat in refMaterial)
                 model.Materials[mat.Name] = mat;
@@ -358,11 +413,20 @@ namespace SimpleMesh.Formats.GLTF
             return model;
         }
 
-        static ModelNode GetNode(GLTFNode[] nodes, int index, List<Geometry> refGeometry, List<Material> refMaterial)
+        static ModelNode GetNode(GLTFNode[] nodes, int index, List<Geometry> refGeometry, List<Material> refMaterial,
+            ModelNode[] concreteNodes, GLTFSkin[] skinSource, Skin[] skinArray)
         {
             var m = new ModelNode();
+            concreteNodes[index] = m;
             m.Name = nodes[index].Name;
             m.Geometry = nodes[index].Geometry;
+            if (nodes[index].Skin != null)
+            {
+                var s = nodes[index].Skin.Value;
+                skinArray[s] ??= new Skin()
+                    { Name = skinSource[s].Name, InverseBindMatrices = skinSource[s].InverseBindMatrices };
+                m.Skin = skinArray[s];
+            }
             if (m.Geometry != null && !refGeometry.Contains(m.Geometry))
             {
                 refGeometry.Add(m.Geometry);
@@ -375,7 +439,7 @@ namespace SimpleMesh.Formats.GLTF
             m.Transform = nodes[index].Transform;
             foreach(var child in nodes[index].Children)
             {
-                m.Children.Add(GetNode(nodes, child, refGeometry, refMaterial));
+                m.Children.Add(GetNode(nodes, child, refGeometry, refMaterial, concreteNodes, skinSource, skinArray));
             }
             return m;
         }
@@ -384,11 +448,21 @@ namespace SimpleMesh.Formats.GLTF
         {
             public List<int> Nodes = new List<int>();
         }
+
+        class GLTFSkin
+        {
+            public string Name;
+            public Matrix4x4[] InverseBindMatrices;
+            public int? Skeleton;
+            public List<int> Joints = [];
+        }
+        
         class GLTFNode
         {
             public string Name;
             public Matrix4x4 Transform;
             public Geometry Geometry;
+            public int? Skin;
             public List<int> Children = new List<int>();
             public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
         }

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 
@@ -32,6 +33,8 @@ namespace SampleRenderer
             GL.BindAttribLocation(ID, 5, "v_texture2");
             GL.BindAttribLocation(ID, 6, "v_texture3");
             GL.BindAttribLocation(ID, 7, "v_texture4");
+            GL.BindAttribLocation(ID, 8, "v_joints");
+            GL.BindAttribLocation(ID, 9, "v_weights");
 
             GL.LinkProgram(ID);
             Console.WriteLine(GL.GetProgramInfoLog(ID));
@@ -75,6 +78,13 @@ namespace SampleRenderer
             if(x != -1) GL.Uniform2(x, v);
         }
         
+        public void Set(string loc, bool v)
+        {
+            Use();
+            var x = GetLocation(loc);
+            if (x != -1) GL.Uniform1(x, v ? 1 : 0);
+        }
+        
         public void Set(string loc, float x, float y, float z)
         {
             Use();
@@ -95,6 +105,17 @@ namespace SampleRenderer
             var x = GetLocation(loc);
             if (x == -1) return;
             GL.UniformMatrix4(x, 1, false, (float*) &mat);
+        }
+        
+        public unsafe void SetSpan(string loc, Span<System.Numerics.Matrix4x4> mats)
+        {
+            Use();
+            var x = GetLocation(loc);
+            if (x == -1) return;
+            fixed (void* ptr = mats)
+            {
+                GL.UniformMatrix4(x, mats.Length, false, (float*)ptr);
+            }
         }
         
         public unsafe void Set(string loc, Matrix4 mat)

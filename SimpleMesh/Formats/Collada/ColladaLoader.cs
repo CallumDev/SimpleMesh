@@ -238,12 +238,7 @@ static class ColladaLoader
             : geo.Attribute("name")!.Value;
 
         // All supported
-        var vertices = new VertexBufferBuilder(
-            VertexAttributes.Position |
-            VertexAttributes.Normal |
-            VertexAttributes.Diffuse |
-            VertexAttributes.Texture1 |
-            VertexAttributes.Texture2);
+        VertexArrayBuilder vertices = null;
         
         var indices = new List<uint>();
         List<TriangleGroup> groups = new List<TriangleGroup>();
@@ -281,6 +276,8 @@ static class ColladaLoader
 
         GeometryKind kind = GeometryKind.Triangles;
         bool set = false;
+        
+        
 
         foreach (var elem in polys)
         {
@@ -355,6 +352,8 @@ static class ColladaLoader
             int offUV2 = int.MinValue;
             int texCount = 0;
             int startIdx = indices.Count;
+            
+            VertexAttributes attrs = 0;
             foreach (var input in inputs)
             {
                 switch (input.Semantic)
@@ -373,12 +372,12 @@ static class ColladaLoader
                                 case SEM_NORMAL:
                                     offNORMAL = (int)input.Offset;
                                     sourceNORMAL = sources[CheckURI(ip2.SourceUrl)];
-                                    conv.Attributes |= VertexAttributes.Normal;
+                                    attrs |= VertexAttributes.Normal;
                                     break;
                                 case SEM_COLOR:
                                     offCOLOR = (int)input.Offset;
                                     sourceCOLOR = sources[CheckURI(ip2.SourceUrl)];
-                                    conv.Attributes |= VertexAttributes.Diffuse;
+                                    attrs |= VertexAttributes.Diffuse;
                                     break;
                                 case SEM_TEXCOORD:
                                     if (texCount == 2)
@@ -387,13 +386,13 @@ static class ColladaLoader
                                     {
                                         offUV2 = (int)input.Offset;
                                         sourceUV2 = sources[CheckURI(ip2.SourceUrl)];
-                                        conv.Attributes |= VertexAttributes.Texture2;
+                                        attrs |= VertexAttributes.Texture2;
                                     }
                                     else
                                     {
                                         offUV1 = (int)input.Offset;
                                         sourceUV1 = sources[CheckURI(ip2.SourceUrl)];
-                                        conv.Attributes |= VertexAttributes.Texture1;
+                                        attrs |= VertexAttributes.Texture1;
                                     }
 
                                     texCount++;
@@ -409,12 +408,12 @@ static class ColladaLoader
                     case SEM_NORMAL:
                         offNORMAL = (int)input.Offset;
                         sourceNORMAL = sources[CheckURI(input.SourceUrl)];
-                        conv.Attributes |= VertexAttributes.Normal;
+                        attrs |= VertexAttributes.Normal;
                         break;
                     case SEM_COLOR:
                         offCOLOR = (int)input.Offset;
                         sourceCOLOR = sources[CheckURI(input.SourceUrl)];
-                        conv.Attributes |= VertexAttributes.Diffuse;
+                        attrs |= VertexAttributes.Diffuse;
                         break;
                     case SEM_TEXCOORD:
                         if (texCount == 2) throw new Exception("Too many texcoords!");
@@ -422,20 +421,26 @@ static class ColladaLoader
                         {
                             offUV2 = (int)input.Offset;
                             sourceUV2 = sources[CheckURI(input.SourceUrl)];
-                            conv.Attributes |= VertexAttributes.Texture2;
+                            attrs |= VertexAttributes.Texture2;
                         }
                         else
                         {
                             offUV1 = (int)input.Offset;
                             sourceUV1 = sources[CheckURI(input.SourceUrl)];
-                            conv.Attributes |= VertexAttributes.Texture1;
+                            attrs |= VertexAttributes.Texture1;
                         }
-
                         texCount++;
                         break;
                 }
             }
-            
+
+            vertices ??= new VertexArrayBuilder(attrs);
+
+            if (attrs != vertices.Attributes)
+            {
+                throw new ModelLoadException(
+                    "SimpleMesh does not support varying vertex types within a single geometry");
+            }
 
 
             for (int i = 0; i < indexCount; i++)
@@ -452,7 +457,9 @@ static class ColladaLoader
                 var color = offCOLOR == int.MinValue ? LinearColor.White : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]);
                 var uv1 = offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]);
                 var uv2 = offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2]);
-                var vert = new Vertex(pos, normal, color, Vector4.Zero, uv1,uv2, Vector2.Zero, Vector2.Zero);
+                var vert = new Vertex(pos, normal, color, Vector4.Zero, uv1, uv2, Vector2.Zero, Vector2.Zero, 
+                    default,
+                    default);
                 indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
             }
 
@@ -467,7 +474,7 @@ static class ColladaLoader
         }
 
         conv.Kind = kind;
-        conv.Vertices = vertices.GetVertices();
+        conv.Vertices = vertices?.Finish();
         conv.Indices = Indices.FromBuffer(indices.ToArray());
         conv.Groups = groups.ToArray();
         return conv;

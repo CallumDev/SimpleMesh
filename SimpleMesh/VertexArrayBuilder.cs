@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace SimpleMesh
 {
-    class VertexBufferBuilder
+    class VertexArrayBuilder
     {
         private IBuilderImpl impl;
 
@@ -13,11 +14,11 @@ namespace SimpleMesh
         
         public void Chunk() => impl.Chunk();
         
-        public Vertex[] GetVertices() => impl.GetVertices();
+        public VertexArray Finish() => impl.Finish();
         
         public VertexAttributes Attributes { get; private set; }
 
-        public VertexBufferBuilder(VertexAttributes attributes)
+        public VertexArrayBuilder(VertexAttributes attributes)
         {
             Attributes = attributes;
             impl = Attributes switch
@@ -25,11 +26,11 @@ namespace SimpleMesh
                 VertexAttributes.Position => new PositionImpl(),
                 VertexAttributes.Position | VertexAttributes.Normal => new PositionNormalImpl(),
                 VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1 => new PositionNormalTex1Impl(),
-                _ => new FullImpl()
+                _ => new FullImpl(Attributes)
             };
         }
 
-        class PositionImpl : BuilderImpl<Vector3>
+        class PositionImpl() : BuilderImpl<Vector3>(0)
         {
             protected override Vector3 FromVertex(ref Vertex vert) => vert.Position;
 
@@ -39,7 +40,8 @@ namespace SimpleMesh
         
         record struct PositionNormal(Vector3 Position, Vector3 Normal);
 
-        class PositionNormalImpl : BuilderImpl<PositionNormal>
+        class PositionNormalImpl() : 
+            BuilderImpl<PositionNormal>(VertexAttributes.Position | VertexAttributes.Normal)
         {
             protected override PositionNormal FromVertex(ref Vertex vert) =>
                 new(vert.Position, vert.Normal);
@@ -50,7 +52,8 @@ namespace SimpleMesh
 
         record struct PositionNormalTex1(Vector3 Position, Vector3 Normal, Vector2 Texture1);
 
-        class PositionNormalTex1Impl : BuilderImpl<PositionNormalTex1>
+        class PositionNormalTex1Impl(): 
+            BuilderImpl<PositionNormalTex1>(VertexAttributes.Normal | VertexAttributes.Texture1)
         {
             protected override PositionNormalTex1 FromVertex(ref Vertex vert) =>
                 new(vert.Position, vert.Normal, vert.Texture1);
@@ -65,7 +68,7 @@ namespace SimpleMesh
                 };
         }
 
-        class FullImpl : BuilderImpl<Vertex>
+        class FullImpl(VertexAttributes attributes) : BuilderImpl<Vertex>(attributes)
         {
             protected override Vertex FromVertex(ref Vertex vert) => vert;
             protected override Vertex FromT(Vertex vert) => vert;
@@ -75,19 +78,26 @@ namespace SimpleMesh
         {
             void Chunk();
             int Add(ref Vertex vert);
-            Vertex[] GetVertices();
+            VertexArray Finish();
             int BaseVertex { get; }
         }
         abstract class BuilderImpl<T> : IBuilderImpl
         {
             Dictionary<T, int> indices = new Dictionary<T, int>();
-            List<T> vertices = new();
+            private VertexArray array;
+            private int vertexCount = 0;
+            
             public int BaseVertex { get; private set; }
+
+            protected BuilderImpl(VertexAttributes attributes)
+            {
+                array = new(attributes, 64);
+            }
 
             public void Chunk()
             {
                 indices = new Dictionary<T, int>();
-                BaseVertex = vertices.Count;
+                BaseVertex = array.Count;
             }
             
             public int Add(ref Vertex vert)
@@ -95,22 +105,23 @@ namespace SimpleMesh
                 var v = FromVertex(ref vert);
                 if (!indices.TryGetValue(v, out int idx))
                 {
-                    idx = vertices.Count;
-                    vertices.Add(v);
+                    if (vertexCount + 1 >= array.Count) {
+                        array.Resize(array.Count * 2);
+                    }
+                    idx = vertexCount;
+                    array.Vertices[idx] = vert;
+                    vertexCount++;
                     indices.Add(v, idx);
                 }
                 return idx;
             }
 
-            public Vertex[] GetVertices()
+            public VertexArray Finish()
             {
-                var v = new Vertex[vertices.Count];
-                for (int i = 0; i < v.Length; i++)
-                {
-                    v[i] = FromT(vertices[i]);
-                }
-                return v;
+                array.Resize(vertexCount);
+                return array;
             }
+            
             protected abstract T FromVertex(ref Vertex vert);
             protected abstract Vertex FromT(T t);
         }

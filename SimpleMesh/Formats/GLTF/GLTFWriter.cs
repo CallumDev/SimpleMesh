@@ -100,20 +100,20 @@ internal static class GLTFWriter
     private static int CreateGeometry(string name, Geometry g, GLTFContext ctx)
     {
         var attributes = new List<(string name, int index)>();
-        if ((g.Attributes & VertexAttributes.Position) != 0)
-            attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Select(x => x.Position).ToArray(), true, BufferTarget.Vertex)));
-        if ((g.Attributes & VertexAttributes.Normal) != 0)
-            attributes.Add(("NORMAL", ctx.AddVector3(g.Vertices.Select(x => x.Normal).ToArray(), false, BufferTarget.Vertex)));
-        if ((g.Attributes & VertexAttributes.Diffuse) != 0)
-            attributes.Add(("COLOR_0", ctx.AddLinearColor(g.Vertices.Select(x => x.Diffuse).ToArray())));
-        if ((g.Attributes & VertexAttributes.Texture1) != 0)
-            attributes.Add(("TEXCOORD_0", ctx.AddVector2(g.Vertices.Select(x => x.Texture1).ToArray())));
-        if ((g.Attributes & VertexAttributes.Texture2) != 0)
-            attributes.Add(("TEXCOORD_1", ctx.AddVector2(g.Vertices.Select(x => x.Texture2).ToArray())));
-        if ((g.Attributes & VertexAttributes.Texture3) != 0)
-            attributes.Add(("TEXCOORD_2", ctx.AddVector2(g.Vertices.Select(x => x.Texture3).ToArray())));
-        if ((g.Attributes & VertexAttributes.Texture4) != 0)
-            attributes.Add(("TEXCOORD_3", ctx.AddVector2(g.Vertices.Select(x => x.Texture4).ToArray())));
+        if (g.Has(VertexAttributes.Position))
+            attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Position, true, BufferTarget.Vertex)));
+        if (g.Has(VertexAttributes.Normal))
+            attributes.Add(("NORMAL", ctx.AddVector3(g.Vertices.Normal, false, BufferTarget.Vertex)));
+        if (g.Has(VertexAttributes.Diffuse))
+            attributes.Add(("COLOR_0", ctx.AddLinearColor(g.Vertices.Diffuse)));
+        if (g.Has(VertexAttributes.Texture1))
+            attributes.Add(("TEXCOORD_0", ctx.AddVector2(g.Vertices.Texture1)));
+        if (g.Has(VertexAttributes.Texture2))
+            attributes.Add(("TEXCOORD_1", ctx.AddVector2(g.Vertices.Texture2)));
+        if (g.Has(VertexAttributes.Texture3))
+            attributes.Add(("TEXCOORD_2", ctx.AddVector2(g.Vertices.Texture3)));
+        if (g.Has(VertexAttributes.Texture4))
+            attributes.Add(("TEXCOORD_3", ctx.AddVector2(g.Vertices.Texture4)));
         var groups = new List<JsonObject>();
         foreach (var tg in g.Groups)
         {
@@ -422,15 +422,16 @@ internal static class GLTFWriter
             while(BufferWriter.BaseStream.Position % 4 != 0)
                 BufferWriter.Write((byte)0);
         }
-
+        
         public int AddVector3(Vector3[] source, bool position, BufferTarget target)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
             var byteLength = source.Length * 12;
             var min = new Vector3(float.MaxValue);
             var max = new Vector3(float.MinValue);
-            foreach (var v in source)
+            for (int i = 0; i < source.Length; i++)
             {
+                var v = source[i];
                 min = Vector3.Min(min, v);
                 max = Vector3.Max(max, v);
                 BufferWriter.Write(v.X);
@@ -455,15 +456,57 @@ internal static class GLTFWriter
             return Accessors.Count - 1;
         }
 
-        public int AddLinearColor(LinearColor[] source)
+        public int AddVector3(VertexArray.Accessor<Vector3> source, bool position, BufferTarget target)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
-            // ReSharper disable once CompareOfFloatsByEqualityOperator
-            bool alpha = source.Any(x => x.A != 1f);
-            var byteLength = source.Length * (alpha ? 16 : 12);
-
-            foreach (var v in source)
+            var byteLength = source.Count * 12;
+            var min = new Vector3(float.MaxValue);
+            var max = new Vector3(float.MinValue);
+            for (int i = 0; i < source.Count; i++)
             {
+                var v = source[i];
+                min = Vector3.Min(min, v);
+                max = Vector3.Max(max, v);
+                BufferWriter.Write(v.X);
+                BufferWriter.Write(v.Y);
+                BufferWriter.Write(v.Z);
+            }
+
+            var access = new JsonObject
+            {
+                {"bufferView", CreateBufferView(byteStart, byteLength, target)},
+                {"componentType", 5126}, //float
+                {"count", source.Count},
+                {"type", "VEC3"}
+            };
+            if (position)
+            {
+                access.Add("max", new JsonArray(max.X, max.Y, max.Z));
+                access.Add("min", new JsonArray(min.X, min.Y, min.Z));
+            }
+
+            Accessors.Add(access);
+            return Accessors.Count - 1;
+        }
+
+        public int AddLinearColor(VertexArray.Accessor<LinearColor> source)
+        {
+            var byteStart = (int) BufferWriter.BaseStream.Position;
+            bool alpha = false;
+            for (int i = 0; i < source.Count; i++)
+            {
+                // ReSharper disable once CompareOfFloatsByEqualityOperator
+                if (source[i].A != 1f)
+                {
+                    alpha = true;
+                    break;
+                }
+            }
+            var byteLength = source.Count * (alpha ? 16 : 12);
+
+            for (int i = 0; i < source.Count; i++)
+            {
+                var v = source[i];
                 BufferWriter.Write(v.R);
                 BufferWriter.Write(v.G);
                 BufferWriter.Write(v.B);
@@ -475,18 +518,19 @@ internal static class GLTFWriter
             {
                 {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Vertex)},
                 {"componentType", 5126}, //float
-                {"count", source.Length},
+                {"count", source.Count},
                 {"type", alpha ? "VEC4" : "VEC3"}
             });
             return Accessors.Count - 1;
         }
         
-        public int AddVector2(Vector2[] source)
+        public int AddVector2(VertexArray.Accessor<Vector2> source)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
-            var byteLength = source.Length * 8;
-            foreach (var v in source)
+            var byteLength = source.Count * 8;
+            for(int i =0; i < source.Count; i++)
             {
+                var v = source[i];
                 BufferWriter.Write(v.X);
                 BufferWriter.Write(v.Y);
             }
@@ -495,7 +539,7 @@ internal static class GLTFWriter
             {
                 {"bufferView", CreateBufferView(byteStart, byteLength, BufferTarget.Vertex)},
                 {"componentType", 5126}, //float
-                {"count", source.Length},
+                {"count", source.Count},
                 {"type", "VEC2"}
             });
             return Accessors.Count - 1;

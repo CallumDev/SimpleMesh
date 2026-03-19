@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using OpenTK.Windowing.Common;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
@@ -20,28 +19,41 @@ namespace SampleOpenTK
 {
     partial class MainWindow : GameWindow
     {
-        private Render2D text;
-        public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
-        {
-        }
-
-        //Handle Input
-
-        private List<Button> buttons = new List<Button>();
-        
         private Shader diffuseShader;
         private Shader pbrShader;
-        private AnimationHandler animations;
 
+        private Render2D text;
+        private List<Button> buttons = new List<Button>();
         private Button openButton;
         private Button saveButton;
         private Button saveGltfButton;
         private Button saveColladaButton;
         private Button pbrButton;
-        
+
         private Dictionary<string, int> textures = new Dictionary<string, int>();
         private int nullTexture;
+
+        private string openfile = null;
+        private Model model;
+        private ModelInstance instance;
         
+        private Button down = null;
+        private float rotateY = 0;
+        private float rotateX = 0;
+        
+        private float zoom = 1;
+        private float modelRadius = 1;
+        private Dictionary<VertexAttributes, VertexBuffer> buffers = new();
+        
+        private bool pbrEnabled = true;
+        private bool hasPbr = false;
+        
+        public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
+            gameWindowSettings, nativeWindowSettings)
+        {
+        }
+        
+
         protected override unsafe void OnLoad()
         {
             base.OnLoad();
@@ -58,9 +70,9 @@ namespace SampleOpenTK
             nullTexture = GL.GenTexture();
             uint white = 0xFFFFFFFF;
             GL.BindTexture(TextureTarget.Texture2D, nullTexture);
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, 1,1, 0,
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, 1, 1, 0,
                 PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)(&white));
-            
+
             openButton = new Button("Open...", 5, 5, () =>
             {
                 openfile = FilePicker.OpenFile();
@@ -75,7 +87,6 @@ namespace SampleOpenTK
                         Console.WriteLine(e);
                     }
                 }
-                    
             });
             saveButton = new Button("Save To Binary", 5, 40, () =>
             {
@@ -106,16 +117,16 @@ namespace SampleOpenTK
             text = new Render2D();
         }
 
-        private Button down = null;
+
         protected override void OnMouseDown(MouseButtonEventArgs e)
         {
-            foreach(var b in buttons)
+            foreach (var b in buttons)
                 b.OnMouseDown(e, MousePosition, text);
         }
-        
+
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
-            foreach(var b in buttons)
+            foreach (var b in buttons)
                 b.OnMouseUp(e, MousePosition, text);
             base.OnMouseUp(e);
         }
@@ -125,18 +136,8 @@ namespace SampleOpenTK
             zoom += e.OffsetY / 8.0f;
         }
 
-        private float rotateY = 0;
-        private float rotateX = 0;
+      
         
-
-        private Model model;
-
-        private int vao;
-        private int vbo;
-        private int ebo;
-
-        private static readonly int VERTEX_SIZE = Marshal.SizeOf<Vertex>();
-
         void SaveModel(string filename, ModelSaveFormat format)
         {
             if (model == null) return;
@@ -146,7 +147,6 @@ namespace SampleOpenTK
 
         void LoadModel(string filename)
         {
-            animations = new AnimationHandler();
             var sw = Stopwatch.StartNew();
             model = Model.FromFile(filename)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
@@ -160,19 +160,12 @@ namespace SampleOpenTK
             {
                 openfile += $"\nGenerator: {model.Generator}";
             }
+
             if (model.Copyright != null)
             {
                 openfile += $"\nCopyright: {model.Copyright}";
             }
-            //Unbind vao so we don't delete the active one
-            GL.BindVertexArray(0);
-            if (vbo != 0)
-            {
-                GL.DeleteVertexArray(vao);
-                GL.DeleteBuffer(ebo);
-                GL.DeleteBuffer(vbo);
-            }
-            foreach(var tex in textures)
+            foreach (var tex in textures)
                 GL.DeleteTexture(tex.Value);
             textures = new(StringComparer.OrdinalIgnoreCase);
 
@@ -189,127 +182,69 @@ namespace SampleOpenTK
             }
 
             zoom = 1;
-            //Calculate size of buffers
-            int vCount = 0;
-            int iCount = 0;
-            bool isIdx32 = false;
-            foreach (var g in model.Geometries) {
-                vCount += g.Vertices.Length;
-                iCount += g.Indices.Length;
-                if (g.Indices.Indices32 != null) isIdx32 = true;
-            }
-            //Copy from Geometry objects into one large buffer to upload to OpenGL
-            Vertex[] vertices = new Vertex[vCount];
-            ushort[] idx16 = isIdx32 ? (ushort[]) null : new ushort[iCount];
-            uint[] idx32 = isIdx32 ? new uint[iCount] : (uint[]) null;
-            vCount = iCount = 0;
+
+            //Unbind vao so we don't delete the active one
+            GL.BindVertexArray(0);
+            foreach (var v in buffers.Values)
+                v.Dispose();
+            buffers = new();
             foreach (var g in model.Geometries)
             {
-                //Store offset into OpenGL buffers in the UserTag field, allows us to render from a Model reference
-                g.UserTag = new BufferOffset() {BaseVertex = vCount, StartIndex = iCount, Index32 = isIdx32};
-                Array.Copy(g.Vertices, 0, vertices, vCount, g.Vertices.Length);
-                if(idx16 != null)
-                    Array.Copy(g.Indices.Indices16, 0, idx16, iCount, g.Indices.Indices16.Length);
-                else
+                if (!buffers.TryGetValue(g.Vertices.Descriptor.Attributes, out var vb))
                 {
-                    if (g.Indices.Indices16 != null) {
-                        for (int i = 0; i < g.Indices.Indices16.Length; i++)
-                            idx32[iCount + i] = g.Indices.Indices16[i];
-                    }
-                    else {
-                        Array.Copy(g.Indices.Indices32, 0, idx32, iCount, g.Indices.Indices32.Length);
-                    }
+                    vb = new VertexBuffer();
+                    buffers[g.Vertices.Descriptor.Attributes] = vb;
                 }
-                vCount += g.Vertices.Length;
-                iCount += g.Indices.Length;
+                var x = vb.Add(g);
+                g.UserTag = new BufferOffset() { Buffer = vb, BaseVertex = x.VertexOffset, StartIndex = x.IndexOffset };
             }
 
-            //Upload data to OpenGL
-            //In a real application, you would pack these vertex buffers tightly after reading
-            vao = GL.GenVertexArray();
-            ebo = GL.GenBuffer();
-            vbo = GL.GenBuffer();
-            
-            GL.BindVertexArray(vao);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, vbo);
-            GL.BufferData(BufferTarget.ArrayBuffer, VERTEX_SIZE * vertices.Length, vertices, BufferUsageHint.StaticDraw);
-            GL.EnableVertexAttribArray(0);
-            GL.EnableVertexAttribArray(1);
-            GL.EnableVertexAttribArray(2);
-            GL.EnableVertexAttribArray(3);
-            GL.EnableVertexAttribArray(4);
-            GL.EnableVertexAttribArray(5);
-            GL.EnableVertexAttribArray(6);
-            GL.EnableVertexAttribArray(7);
-            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, VERTEX_SIZE, 0);
-            GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, VERTEX_SIZE, 3 * sizeof(float));
-            GL.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, VERTEX_SIZE, 6 * sizeof(float));
-            GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, VERTEX_SIZE, 10 * sizeof(float));
-            GL.VertexAttribPointer(4, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 14 * sizeof(float));
-            GL.VertexAttribPointer(5, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 16 * sizeof(float));
-            GL.VertexAttribPointer(6, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 18 * sizeof(float));
-            GL.VertexAttribPointer(7, 2, VertexAttribPointerType.Float, false, VERTEX_SIZE, 20 * sizeof(float));
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, ebo);
-            if (isIdx32)
-                GL.BufferData(BufferTarget.ElementArrayBuffer, sizeof(uint) * idx32.Length, idx32,
-                    BufferUsageHint.StaticDraw);
-            else
-                GL.BufferData(BufferTarget.ElementArrayBuffer, sizeof(ushort) * idx16.Length, idx16, BufferUsageHint.StaticDraw);
-            GL.BindVertexArray(0);
+            foreach (var v in buffers.Values)
+                v.Create();
 
             hasPbr = pbrEnabled = model.Materials.Any(x => x.Value.MetallicRoughness);
             if (hasPbr)
             {
                 pbrButton.Text = "PBR Enabled";
-                buttons = new List<Button>(new[] { openButton, saveButton, saveGltfButton, saveColladaButton, pbrButton });
+                buttons = new List<Button>(new[]
+                    { openButton, saveButton, saveGltfButton, saveColladaButton, pbrButton });
             }
             else
-                buttons = new List<Button>(new[] {openButton, saveButton, saveColladaButton, saveGltfButton});
+                buttons = new List<Button>(new[] { openButton, saveButton, saveColladaButton, saveGltfButton });
+
             int y = 5;
             if (model.Animations != null)
             {
                 foreach (var anim in model.Animations)
                 {
                     buttons.Add(new Button(anim.Name ?? "ANIMATION", 200, y,
-                        () => { animations.Instances.Add(new AnimationInstance() {Animation = anim}); }));
+                        () => { instance.Animator.Instances.Add(new AnimationInstance() { Animation = anim }); }));
                     y += 35;
                 }
             }
 
             modelRadius = 0;
-            for (int i = 0; i < model.Roots.Length; i++) {
+            for (int i = 0; i < model.Roots.Length; i++)
+            {
                 GetRadius(model.Roots[i], Matrix4x4.Identity, ref modelRadius);
             }
 
             if (modelRadius <= 0)
                 modelRadius = 1;
+
+            instance = new ModelInstance(model);
         }
 
         class BufferOffset
         {
+            public VertexBuffer Buffer;
             public int BaseVertex;
             public int StartIndex;
-            public bool Index32;
         }
 
-        private bool pbrEnabled = true;
-        private bool hasPbr = false;
-        
         //Unsafe required to use System.Numerics under OpenTK
-        unsafe void DrawNode(ModelNode node, Matrix4x4 parent)
+        unsafe void DrawNode(InstanceNode node, Matrix4x4 world, ref SkinInstance boundSkin, ref int boundVao)
         {
-            var (animTranslate, animRotate) = animations.GetAnimated(node.Name, out var tr, out var rot);
-            Matrix4x4 selfTransform;
-            Matrix4x4.Decompose(node.Transform, out _, out var nodeRotate, out var nodeTranslate);
-            if (animTranslate && !animRotate)
-                selfTransform = Matrix4x4.CreateFromQuaternion(nodeRotate) * Matrix4x4.CreateTranslation(tr);
-            else if (animRotate && !animTranslate)
-                selfTransform = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(nodeTranslate);
-            else if (animTranslate && animRotate)
-                selfTransform = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(tr);
-            else
-                selfTransform = node.Transform;
-            //
             void BindTexture(TextureInfo tex, TextureUnit unit)
             {
                 GL.ActiveTexture(unit);
@@ -324,20 +259,38 @@ namespace SampleOpenTK
                     GL.BindTexture(TextureTarget.Texture2D, pbrTex);
                 }
             }
-            var mymat = selfTransform * parent;
-            if (node.Geometry != null) //some models will have empty nodes purely for transforms
+
+            var mymat = node.Transform * world;
+            var geo = node.Node.Geometry;
+            if (geo != null) //some models will have empty nodes purely for transforms
             {
                 Matrix4x4.Invert(mymat, out var normalmat);
                 normalmat = Matrix4x4.Transpose(normalmat);
-                
+
                 diffuseShader.Set("world", mymat);
                 diffuseShader.Set("normalmat", normalmat);
-                
+
                 pbrShader.Set("world", mymat);
                 pbrShader.Set("normalmat", normalmat);
-                var off = (BufferOffset) node.Geometry.UserTag;
+                var off = (BufferOffset)geo.UserTag;
+                if (boundVao != off.Buffer.VAO)
+                {
+                    GL.BindVertexArray(off.Buffer.VAO);
+                    boundVao = off.Buffer.VAO;
+                    diffuseShader.Set("UseDiffuse", off.Buffer.VertexArrays[0].Descriptor.Diffuse > 0);
+                    pbrShader.Set("UseDiffuse", off.Buffer.VertexArrays[0].Descriptor.Diffuse > 0);
+                }
+                diffuseShader.Set("UseSkinning", node.Skin != null);
+                pbrShader.Set("UseSkinning", node.Skin != null);
+                if (node.Skin != null && node.Skin != boundSkin)
+                {
+                    boundSkin = node.Skin;
+                    diffuseShader.SetSpan("Bones", node.Skin.Matrices);
+                    pbrShader.SetSpan("Bones", node.Skin.Matrices);
+                }
                 
-                foreach (var tg in node.Geometry.Groups)
+
+                foreach (var tg in geo.Groups)
                 {
                     var isPbr = (tg.Material.MetallicRoughness && pbrEnabled);
                     Shader sh = isPbr
@@ -352,9 +305,11 @@ namespace SampleOpenTK
                     {
                         sh.SetF("mat_roughness", tg.Material.RoughnessFactor);
                         sh.SetF("mat_metallic", tg.Material.MetallicFactor);
-                        sh.SetI("texcoord_metallicRoughness", tg.Material.MetallicRoughnessTexture?.CoordinateIndex ?? 0);
+                        sh.SetI("texcoord_metallicRoughness",
+                            tg.Material.MetallicRoughnessTexture?.CoordinateIndex ?? 0);
                         BindTexture(tg.Material.MetallicRoughnessTexture, TextureUnit.Texture3);
                     }
+
                     BindTexture(tg.Material.NormalTexture, TextureUnit.Texture2);
                     sh.SetI("texcoord_normal", tg.Material.NormalTexture?.CoordinateIndex ?? 0);
                     sh.SetI("mat_normalMap", tg.Material.NormalTexture != null ? 1 : 0);
@@ -363,23 +318,19 @@ namespace SampleOpenTK
                     sh.SetI("texcoord_emissive", tg.Material.EmissiveTexture?.CoordinateIndex ?? 0);
                     BindTexture(tg.Material.DiffuseTexture, TextureUnit.Texture0);
                     GL.DrawElementsBaseVertex(
-                        node.Geometry.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
-                        tg.IndexCount, off.Index32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
-                        (IntPtr) ((tg.StartIndex + off.StartIndex) * (off.Index32 ? 4 : 2)),
+                        geo.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
+                        tg.IndexCount, off.Buffer.IsIndex32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
+                        (IntPtr)((tg.StartIndex + off.StartIndex) * (off.Buffer.IsIndex32 ? 4 : 2)),
                         off.BaseVertex + tg.BaseVertex
                     );
                 }
             }
+
             foreach (var child in node.Children)
             {
-                DrawNode(child, mymat);
+                DrawNode(child, world, ref boundSkin, ref boundVao);
             }
         }
-
-        private float zoom = 1;
-        private float modelRadius = 1;
-
-        private string openfile = null;
 
         //Find first model node we can find. Used for zoom when empty parent object used
         void GetRadius(ModelNode m, Matrix4x4 matrix, ref float radius)
@@ -391,14 +342,15 @@ namespace SampleOpenTK
                 if (d + m.Geometry.Radius > radius)
                     radius = (d + m.Geometry.Radius);
             }
+
             foreach (var child in m.Children)
             {
                 GetRadius(child, tr, ref radius);
             }
         }
+
         protected override void OnRenderFrame(FrameEventArgs args)
         {
-            animations?.Update((float)args.Time);
             var sz = this.ClientSize;
             GL.Viewport(0, 0, sz.X, sz.Y);
             GL.ClearColor(Color4.Blue);
@@ -409,29 +361,29 @@ namespace SampleOpenTK
 
             if (IsKeyDown(Keys.Right))
             {
-                rotateY += (float) args.Time * 2;
+                rotateY += (float)args.Time * 2;
             }
+
             if (IsKeyDown(Keys.Left))
             {
                 rotateY -= (float)args.Time * 2;
             }
-            
+
             if (IsKeyDown(Keys.Up))
             {
-                rotateX += (float) args.Time * 2;
+                rotateX += (float)args.Time * 2;
             }
+
             if (IsKeyDown(Keys.Down))
             {
                 rotateX -= (float)args.Time * 2;
             }
-            
+
             if (model != null)
-            {
-                
-                GL.BindVertexArray(vao);
+            { 
                 //generate camera matrix based off model dimensions
-                
-                var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60), (float) Size.X / Size.Y,
+                var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60),
+                    (float)Size.X / Size.Y,
                     0.02f, 10000);
                 var campos = new Vector3(0, 0, (-modelRadius * 4) * zoom);
                 var view = Matrix4.LookAt(campos, Vector3.Zero, Vector3.UnitY);
@@ -447,29 +399,39 @@ namespace SampleOpenTK
                 pbrShader.Set("viewprojection", vp);
                 pbrShader.Set("light_direction", 0.0f, 0.5f, -0.5f);
                 pbrShader.Set("camera_pos", campos.X, campos.Y, campos.Z);
+                //update all transform matrices and animations
+                instance.Animator.Update((float)args.Time);
+                instance.UpdateTransforms();
                 //draw starting at first root node.
-                for (int i = 0; i < model.Roots.Length; i++)
+                int boundVao = 0;
+                SkinInstance boundSkin = null;
+                for (int i = 0; i < instance.Roots.Length; i++)
                 {
-                    DrawNode(model.Roots[i], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX));
+                    DrawNode(instance.Roots[i], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX),
+                        ref boundSkin,
+                        ref boundVao);
                 }
+
                 //reset texture state
                 GL.ActiveTexture(TextureUnit.Texture0);
             }
+
             //Draw UI
             text.Start(sz.X, sz.Y);
             foreach (var b in buttons)
             {
                 b.Render(text);
             }
+
             text.DrawString("Mouse Wheel - Zoom, Keyboard Up/Down/Left/Right - Rotate", 5, sz.Y - 60);
             if (openfile != null)
                 text.DrawString(openfile, 5, sz.Y - text.MeasureString(openfile).Y - 90);
-            
+
             text.Finish();
             SwapBuffers();
         }
 
-        static void Main(string[] args)
+        static void Main()
         {
             var settings = NativeWindowSettings.Default;
             settings.ClientSize = new Vector2i(1024, 768);

@@ -34,6 +34,12 @@ class FloatBuffer
         }
     }
 
+    public float this[int channel, int c]
+    {
+        get => GetFloat(channel, c);
+        set => SetFloat(value, channel, c);
+    }
+
     public void SetFloat(float f, int channel, int c)
     {
         var byteChannel = channel * 4;

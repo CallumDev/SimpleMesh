@@ -11,6 +11,7 @@ namespace SimpleMesh
         public Geometry Geometry;
         public List<ModelNode> Children = new List<ModelNode>();
         public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
+        public Skin Skin;
 
         internal ModelNode Clone(Model newModel, Model existingModel)
         {

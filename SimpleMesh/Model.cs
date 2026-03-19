@@ -17,6 +17,7 @@ namespace SimpleMesh
         public Dictionary<string, Material> Materials;
         public Dictionary<string, ImageData> Images;
         public Animation[] Animations;
+        public Skin[] Skins;
 
         public string Copyright;
         public string Generator;
@@ -85,11 +86,18 @@ namespace SimpleMesh
             {
                 if (node.Geometry != null)
                 {
-                    for (int i = 0; i < node.Geometry.Vertices.Length; i++)
+                    for (int i = 0; i < node.Geometry.Vertices.Count; i++)
                     {
-                        node.Geometry.Vertices[i].Position *= myScale;
-                        node.Geometry.Vertices[i].Normal =
-                            Vector3.Normalize(myScale * node.Geometry.Vertices[i].Normal);
+                        node.Geometry.Vertices.Position[i] *= myScale;
+                        
+                    }
+                    if (node.Geometry.Has(VertexAttributes.Normal))
+                    {
+                        for (int i = 0; i < node.Geometry.Vertices.Count; i++)
+                        {
+                            node.Geometry.Vertices.Normal[i] =
+                                Vector3.Normalize(myScale * node.Geometry.Vertices.Normal[i]);
+                        }
                     }
                 }
                 node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
@@ -118,10 +126,16 @@ namespace SimpleMesh
                     }
                     if (m.Geometry != null)
                     {
-                        for (int i = 0; i < m.Geometry.Vertices.Length; i++)
+                        for (int i = 0; i < m.Geometry.Vertices.Count; i++)
                         {
-                            m.Geometry.Vertices[i].Position = Vector3.Transform(m.Geometry.Vertices[i].Position, tr);
-                            m.Geometry.Vertices[i].Normal = Vector3.TransformNormal(m.Geometry.Vertices[i].Normal, tr);
+                            m.Geometry.Vertices.Position[i] = Vector3.Transform(m.Geometry.Vertices.Position[i], tr);
+                        }
+                        if (m.Geometry.Has(VertexAttributes.Normal))
+                        {
+                            for (int i = 0; i < m.Geometry.Vertices.Count; i++)
+                            {
+                                m.Geometry.Vertices.Normal[i] = Vector3.TransformNormal(m.Geometry.Vertices.Normal[i], tr);
+                            }
                         }
                     }
                     foreach (var child in m.Children)

@@ -12,6 +12,7 @@ namespace SimpleMesh
         Texture1 = (1 << 4),
         Texture2 = (1 << 5),
         Texture3 = (1 << 6),
-        Texture4 = (1 << 7)
+        Texture4 = (1 << 7),
+        Joints = (1 << 8)
     }
 }

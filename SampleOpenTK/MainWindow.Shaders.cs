@@ -17,6 +17,9 @@ attribute vec2 v_texture2;
 attribute vec2 v_texture3;
 attribute vec2 v_texture4;
 
+attribute ivec4 v_joints;
+attribute vec4 v_weights;
+
 varying vec4 diffuse;
 varying vec3 worldpos;
 varying vec3 normal;
@@ -24,26 +27,61 @@ varying vec2 texcoord[4];
 varying mat3 tbn;
 
 uniform sampler2D Texture;
+uniform bool UseDiffuse;
+uniform bool UseSkinning;
+
+uniform mat4 Bones[32];
 
 void main()
 {
-    diffuse = v_diffuse;
+    diffuse = UseDiffuse ? v_diffuse : vec4(1.0);
     texcoord[0] = v_texture1;
     texcoord[1] = v_texture2;
     texcoord[2] = v_texture3;
     texcoord[3] = v_texture4;
     mat4 mvp = (viewprojection * world);
-    vec4 wp = (world * vec4(v_position, 1.0));
-    worldpos = wp.xyz / wp.w;
-    // Regular normals
-    normal = (normalmat * vec4(v_normal, 0.0)).xyz;
-    // tbn for normal mapping, in a regular shader this would be optimised out
-    vec3 normalW = normalize(vec3(normalmat * vec4(v_normal.xyz, 0.0)));
-    vec3 tangentW = normalize(vec3(normalmat * vec4(v_tangent.xyz, 0.0)));
-    vec3 bitangentW = cross(normalW, tangentW) * v_tangent.w;
-    tbn = mat3(tangentW, bitangentW, normalW);
 
-    gl_Position = mvp * vec4(v_position, 1.0);
+    if(UseSkinning)
+    {
+        mat4 skinMat =
+            v_weights.x * Bones[v_joints.x] +
+            v_weights.y * Bones[v_joints.y] +
+            v_weights.z * Bones[v_joints.z] +
+            v_weights.w * Bones[v_joints.w];
+
+        vec4 sp = skinMat * vec4(v_position, 1.0);
+        vec3 s_position = sp.xyz / sp.w;
+
+        mat3 skinMat3 = mat3(skinMat);
+        vec3 s_normal = normalize(skinMat3 * v_normal);
+        vec3 s_tangent = normalize(skinMat3 * v_tangent.xyz);
+        // Regular normals
+        normal = (normalmat * vec4(s_normal, 0.0)).xyz;
+        // tbn for normal mapping, in a regular shader this would be optimised out
+        vec3 normalW = normalize((normalmat * vec4(s_normal, 0.0)).xyz);
+        vec3 tangentW = normalize((normalmat * vec4(s_tangent, 0.0)).xyz);
+        vec3 bitangentW = cross(normalW, tangentW) * v_tangent.w;
+        tbn = mat3(tangentW, bitangentW, normalW);
+
+        vec4 wp = (world * vec4(s_position, 1.0));
+        worldpos = wp.xyz / wp.w;
+        gl_Position = mvp * wp;
+    }
+    else
+    {
+        vec4 wp = (world * vec4(v_position, 1.0));
+        worldpos = wp.xyz / wp.w;
+        // Regular normals
+        normal = (normalmat * vec4(v_normal, 0.0)).xyz;
+        // tbn for normal mapping, in a regular shader this would be optimised out
+        vec3 normalW = normalize(vec3(normalmat * vec4(v_normal.xyz, 0.0)));
+        vec3 tangentW = normalize(vec3(normalmat * vec4(v_tangent.xyz, 0.0)));
+        vec3 bitangentW = cross(normalW, tangentW) * v_tangent.w;
+        tbn = mat3(tangentW, bitangentW, normalW);
+
+        gl_Position = mvp * vec4(v_position, 1.0);
+    }
+  
 }
 ";
 

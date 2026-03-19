@@ -15,7 +15,6 @@ namespace SimpleMesh.Formats.GLTF
                 int k = 0;
                 foreach (var n in nodesElement.EnumerateArray())
                 {
-                    
                     if (!n.TryGetProperty("mesh", out var meshElement))
                         continue;
                     var idx = meshElement.GetInt32();
@@ -38,7 +37,7 @@ namespace SimpleMesh.Formats.GLTF
             int startIndex = 0;
             List<uint> indexArray = new List<uint>();
             List<TriangleGroup> tg = new List<TriangleGroup>();
-            g.Attributes = VertexAttributes.Position;
+            var attrs = VertexAttributes.Position;
 
             // Calculate attributes
             foreach (var prim in primArray.EnumerateArray())
@@ -50,31 +49,35 @@ namespace SimpleMesh.Formats.GLTF
                     switch (elem.Name)
                     {
                         case "NORMAL":
-                            g.Attributes |= VertexAttributes.Normal;
+                            attrs |= VertexAttributes.Normal;
                             break;
                         case "TEXCOORD_0":
-                            g.Attributes |= VertexAttributes.Texture1;
+                            attrs |= VertexAttributes.Texture1;
                             break;
                         case "TEXCOORD_1":
-                            g.Attributes |= VertexAttributes.Texture2;
+                            attrs |= VertexAttributes.Texture2;
                             break;
                         case "TEXCOORD_2":
-                            g.Attributes |= VertexAttributes.Texture3;
+                            attrs |= VertexAttributes.Texture3;
                             break;
                         case "TEXCOORD_3":
-                            g.Attributes |= VertexAttributes.Texture4;
+                            attrs |= VertexAttributes.Texture4;
                             break;
                         case "COLOR_0":
-                            g.Attributes |= VertexAttributes.Diffuse;
+                            attrs |= VertexAttributes.Diffuse;
                             break;
                         case "TANGENT":
-                            g.Attributes |= VertexAttributes.Tangent;
+                            attrs |= VertexAttributes.Tangent;
+                            break;
+                        case "JOINTS_0":
+                        case "WEIGHTS_0":
+                            attrs |= VertexAttributes.Joints;
                             break;
                     }
                 }
             }
 
-            VertexBufferBuilder vertexArray = new VertexBufferBuilder(g.Attributes);
+            VertexArrayBuilder vertexArray = new VertexArrayBuilder(attrs);
             
             int startMode = -1;
             foreach (var prim in primArray.EnumerateArray())
@@ -101,7 +104,16 @@ namespace SimpleMesh.Formats.GLTF
                 }
                 startMode = mode;
 
-                int posIndex = -1, normIndex = -1, tex1Index = -1, colIndex = -1, tex2Index = -1, tangentIndex = -1, tex3Index = -1, tex4Index = -1;
+                int posIndex = -1,
+                    normIndex = -1,
+                    tex1Index = -1,
+                    colIndex = -1,
+                    tex2Index = -1,
+                    tangentIndex = -1,
+                    tex3Index = -1,
+                    tex4Index = -1,
+                    jointIndex = -1,
+                    weightIndex = -1;
                 foreach (var elem in attrArray.EnumerateObject())
                 {
                     switch (elem.Name)
@@ -130,7 +142,20 @@ namespace SimpleMesh.Formats.GLTF
                         case "TANGENT":
                             tangentIndex = elem.Value.GetInt32();
                             break;
+                        case "JOINTS_0":
+                            jointIndex = elem.Value.GetInt32();
+                            break;
+                        case "WEIGHTS_0":
+                            weightIndex = elem.Value.GetInt32();
+                            break;
                     }
+                }
+
+                if ((jointIndex > -1 || weightIndex > -1) &&
+                    (jointIndex == -1 || weightIndex == -1))
+                {
+                    throw new ModelLoadException(
+                        "Geometry contains singular joints/weights without matching attribute");
                 }
 
                 if (prim.TryGetProperty("indices", out var indicesProp))
@@ -168,6 +193,11 @@ namespace SimpleMesh.Formats.GLTF
                             else
                                 v.Diffuse = LinearColor.FromVector4(accessors[colIndex].GetVector4((int) index));
                         }
+                        if (jointIndex != -1)
+                        {
+                            v.JointIndices = accessors[jointIndex].GetUShort4((int)index);
+                            v.JointWeights = accessors[weightIndex].GetVector4((int)index);
+                        }
                         int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);
                     }
@@ -202,9 +232,14 @@ namespace SimpleMesh.Formats.GLTF
                         if (colIndex != -1)
                         {
                             if (accessors[colIndex].Type == AccessorType.VEC3)
-                                v.Diffuse = LinearColor.FromVector4(new Vector4(accessors[colIndex].GetVector3((int) index), 1.0f));
+                                v.Diffuse = LinearColor.FromVector4(new Vector4(accessors[colIndex].GetVector3(index), 1.0f));
                             else
-                                v.Diffuse = LinearColor.FromVector4(accessors[colIndex].GetVector4((int) index));
+                                v.Diffuse = LinearColor.FromVector4(accessors[colIndex].GetVector4(index));
+                        }
+                        if (jointIndex != -1)
+                        {
+                            v.JointIndices = accessors[jointIndex].GetUShort4(index);
+                            v.JointWeights = accessors[weightIndex].GetVector4(index);
                         }
                         int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);
@@ -235,7 +270,7 @@ namespace SimpleMesh.Formats.GLTF
                     throw new Exception(GError("Unsupported primitive mode " + startMode));
             }
 
-            g.Vertices = vertexArray.GetVertices();
+            g.Vertices = vertexArray.Finish();
             g.Indices = Indices.FromBuffer(indexArray.ToArray());
             g.Groups = tg.ToArray();
             
@@ -418,6 +453,23 @@ namespace SimpleMesh.Formats.GLTF
         {
             var off = ByteOffset + BufferView.ByteOffset + (GetStride() * i);
             return new Vector4(GetComponent(off, 0), GetComponent(off, 1), GetComponent(off, 2), GetComponent(off, 3));
+        }
+
+        public Point4<ushort> GetUShort4(int i)
+        {
+            var off = ByteOffset + BufferView.ByteOffset + (GetStride() * i);
+            return new Point4<ushort>((ushort)GetComponent(off, 0), (ushort)GetComponent(off, 1), (ushort)GetComponent(off, 2),
+                (ushort)GetComponent(off, 3));
+        }
+
+        public Matrix4x4 GetMatrix4x4(int i)
+        {
+            var off = ByteOffset + BufferView.ByteOffset + (GetStride() * i);
+            return new Matrix4x4(
+                GetComponent(off, 0), GetComponent(off, 1), GetComponent(off, 2), GetComponent(off, 3),
+                GetComponent(off, 4), GetComponent(off, 5), GetComponent(off, 6), GetComponent(off, 7),
+                GetComponent(off, 8), GetComponent(off, 9), GetComponent(off, 10), GetComponent(off, 11),
+                GetComponent(off, 12), GetComponent(off, 13), GetComponent(off, 14), GetComponent(off, 15));
         }
     }
 

@@ -9,8 +9,7 @@ namespace SimpleMesh
     {
         public string Name;
         public GeometryKind Kind;
-        public VertexAttributes Attributes;
-        public Vertex[] Vertices;
+        public VertexArray Vertices;
         public Indices Indices;
         public TriangleGroup[] Groups;
 
@@ -26,27 +25,19 @@ namespace SimpleMesh
 
         public void CalculateBounds()
         {
-            float minX = float.MaxValue, minY = float.MaxValue, minZ = float.MaxValue;
-            float maxX = float.MinValue, maxY = float.MinValue, maxZ = float.MinValue;
-            float avgX = 0, avgY = 0, avgZ = 0;
-            foreach (var v in Vertices)
+            Vector3 min = new(float.MaxValue);
+            Vector3 max = new(float.MinValue);
+            Vector3 avg = new(0);
+            for(int i = 0; i < Vertices.Count; i++)
             {
-                minX = Math.Min(minX, v.Position.X);
-                minY = Math.Min(minY, v.Position.Y);
-                minZ = Math.Min(minZ, v.Position.Z);
-
-                maxX = Math.Max(maxX, v.Position.X);
-                maxY = Math.Max(maxY, v.Position.Y);
-                maxZ = Math.Max(maxZ, v.Position.Z);
-
-                avgX += v.Position.X;
-                avgY += v.Position.Y;
-                avgZ += v.Position.Z;
+                min = Vector3.Min(min, Vertices.Position[i]);
+                max = Vector3.Max(max, Vertices.Position[i]);
+                avg += Vertices.Position[i];
             }
 
-            Min = new Vector3(minX, minY, minZ);
-            Max = new Vector3(maxX, maxY, maxZ);
-            Center = new Vector3(avgX, avgY, avgZ) / Vertices.Length;
+            Min = min;
+            Max = max;
+            Center = avg / Vertices.Count;
             Radius = Math.Max(
                 Vector3.Distance(Center, Min),
                 Vector3.Distance(Center, Max)
@@ -57,11 +48,17 @@ namespace SimpleMesh
         {
             public record struct UnweldedGroup(int StartVertex, int VertexCount);
 
-            public Vertex[] Vertices;
+            public Vector4[] Tangents;
             public UnweldedGroup[] Groups;
+            public int[] Source;
+            public VertexArray Original;
+
+            public Vertex GetVertex(int index) =>
+                Original.Vertices[Source[index]] with { Tangent = Tangents[index] };
 
             public UnweldedTriangles(Geometry g)
             {
+                Original = g.Vertices;
                 Groups = new UnweldedGroup[g.Groups.Length];
                 int count = 0;
                 for (int i = 0; i < g.Groups.Length; i++)
@@ -70,54 +67,57 @@ namespace SimpleMesh
                     count += g.Groups[i].IndexCount;
                 }
 
-                Vertices = new Vertex[count];
+                Tangents = new Vector4[count];
+                Source = new int[count];
+                
                 int vtx = 0;
                 for (int i = 0; i < g.Groups.Length; i++)
                 {
                     for (int j = 0; j < g.Groups[i].IndexCount; j++)
                     {
-                        var idx = g.Indices[g.Groups[i].StartIndex + j] + g.Groups[i].BaseVertex;
-                        Vertices[vtx++] = g.Vertices[idx];
+                        var idx = (int)(g.Indices[g.Groups[i].StartIndex + j] + g.Groups[i].BaseVertex);
+                        Source[vtx] = idx;
                     }
                 }
             }
 
-            public int GetNumFaces() => Vertices.Length / 3;
+            public int GetNumFaces() => Original.Count / 3;
 
             public int GetNumVerticesOfFace(int index) => 3;
             
             int Index(int faceIndex, int faceVertex) => faceIndex * 3 + faceVertex;
 
             public Vector3 GetPosition(int faceIndex, int faceVertex) =>
-                Vertices[Index(faceIndex, faceVertex)].Position;
+                Original.Position[Source[Index(faceIndex, faceVertex)]];
 
             public Vector3 GetNormal(int faceIndex, int faceVertex) =>
-                Vertices[Index(faceIndex, faceVertex)].Normal;
+                Original.Normal[Source[Index(faceIndex, faceVertex)]];
 
             public Vector2 GetTexCoord(int faceIndex, int faceVertex) =>
-                Vertices[Index(faceIndex, faceVertex)].Texture1;
+                Original.Texture1[Source[Index(faceIndex, faceVertex)]];
 
             public void SetTangent(Vector4 tangent, int faceIndex, int faceVertex) => 
-                Vertices[Index(faceIndex, faceVertex)].Tangent = tangent;
+                Tangents[Index(faceIndex, faceVertex)] = tangent;
         }
         
         public void CalculateTangents(bool overwrite = false)
         {
-            if ((Has(VertexAttributes.Tangent) & !overwrite) || Kind == GeometryKind.Lines)
+            if ((Has(VertexAttributes.Tangent) & !overwrite) || Kind == GeometryKind.Lines ||
+                !Has(VertexAttributes.Normal) || !Has(VertexAttributes.Texture1))
                 return;
             var unwelded = new UnweldedTriangles(this);
             TangentGeneration.GenerateMikkTSpace(unwelded);
 
             List<uint> indexArray = new();
             int startIndex = 0;
-            var vb = new VertexBufferBuilder(Attributes | VertexAttributes.Tangent);
+            var vb = new VertexArrayBuilder(Vertices.Descriptor.Attributes | VertexAttributes.Tangent);
 
             for (int i = 0; i < Groups.Length; i++)
             {
                 for (int j = 0; j < unwelded.Groups[i].VertexCount; j++)
                 {
-                    var idx = vb.Add(ref unwelded.Vertices[j + unwelded.Groups[i].StartVertex]) -
-                              vb.BaseVertex;
+                    var v = unwelded.GetVertex(j + unwelded.Groups[i].StartVertex);
+                    var idx = vb.Add(ref v) - vb.BaseVertex;
                     indexArray.Add((uint)idx);
                 }
                 Groups[i].StartIndex = startIndex;
@@ -126,7 +126,7 @@ namespace SimpleMesh
                 vb.Chunk();
             }
             Indices = Indices.FromBuffer(indexArray.ToArray());
-            Vertices = vb.GetVertices();
+            Vertices = vb.Finish();
         }
         
         public void CalculateNormals(bool overwrite = false)
@@ -134,9 +134,10 @@ namespace SimpleMesh
             if ((Has(VertexAttributes.Normal) && !overwrite) || Kind == GeometryKind.Lines)
                 return;
 
-            for (int i = 0; i < Vertices.Length; i++)
+            Vertices.ChangeAttributes(Vertices.Descriptor.Attributes | VertexAttributes.Normal);
+            for (int i = 0; i < Vertices.Count; i++)
             {
-                Vertices[i].Normal = Vector3.Zero;
+                Vertices.Normal[i] = Vector3.Zero;
             }
             
             for (int i = 0; i < Groups.Length; i++)
@@ -150,30 +151,28 @@ namespace SimpleMesh
                     var i1 = (int)(Indices[indexArray + 1] + bv);
                     var i2 = (int)(Indices[indexArray + 2] + bv);
                     
-                    Vector3 p0 = Vertices[i0].Position;
-                    Vector3 p1 = Vertices[i1].Position;
-                    Vector3 p2 = Vertices[i2].Position;
+                    Vector3 p0 = Vertices.Position[i0];
+                    Vector3 p1 = Vertices.Position[i1];
+                    Vector3 p2 = Vertices.Position[i2];
 
                     Vector3 u = p1 - p0;
                     Vector3 v = p2 - p0;
 
                     Vector3 faceNormal = Vector3.Cross(u, v);
 
-                    Vertices[i0].Normal += faceNormal;
-                    Vertices[i1].Normal += faceNormal;
-                    Vertices[i2].Normal += faceNormal;
+                    Vertices.Normal[i0] += faceNormal;
+                    Vertices.Normal[i1] += faceNormal;
+                    Vertices.Normal[i2] += faceNormal;
                 }
             }
 
-            for (int i = 0; i < Vertices.Length; i++)
+            for (int i = 0; i < Vertices.Count; i++)
             {
-                if (Vertices[i].Normal != Vector3.Zero)
+                if (Vertices.Normal[i] != Vector3.Zero)
                 {
-                    Vertices[i].Normal = Vector3.Normalize(Vertices[i].Normal);
+                    Vertices.Normal[i] = Vector3.Normalize(Vertices.Normal[i]);
                 }
             }
-
-            Attributes |= VertexAttributes.Normal;
         }
         
 
@@ -181,8 +180,7 @@ namespace SimpleMesh
         {
             Name = Name,
             Kind = Kind,
-            Attributes = Attributes,
-            Vertices = Vertices.ToArray(),
+            Vertices = Vertices.Clone(),
             Indices = Indices.Clone(),
             Groups = Groups.Select(x => x.Clone(model)).ToArray(),
             Center = Center,
@@ -193,7 +191,7 @@ namespace SimpleMesh
         };
 
         internal bool Has(VertexAttributes attributes) =>
-            (Attributes & attributes) == attributes;
+            (Vertices.Descriptor.Attributes & attributes) == attributes;
         
     }
 }

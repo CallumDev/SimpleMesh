@@ -184,11 +184,11 @@ public class Hull
                     : geometry.Indices.Indices16[geometry.Groups[i].StartIndex + j];
                 var idx = (int)(geometry.Groups[i].BaseVertex + srcIndex);
 
-                var merged = GetMergedIndex(geometry.Vertices[idx].Position, vertexArray);
+                var merged = GetMergedIndex(geometry.Vertices.Position[idx], vertexArray);
                 if (merged == -1) 
                 {
                     indexArray.Add(vertexArray.Count);
-                    vertexArray.Add(geometry.Vertices[idx].Position);
+                    vertexArray.Add(geometry.Vertices.Position[idx]);
                 }
                 else {
                     indexArray.Add(merged);

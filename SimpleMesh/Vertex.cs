@@ -1,8 +1,6 @@
 using System;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 
 namespace SimpleMesh
 {
@@ -17,6 +15,8 @@ namespace SimpleMesh
         public Vector2 Texture2;
         public Vector2 Texture3;
         public Vector2 Texture4;
+        public Point4<ushort> JointIndices;
+        public Vector4 JointWeights;
         
         public Vertex(
             Vector3 pos, 
@@ -26,7 +26,9 @@ namespace SimpleMesh
             Vector2 tex1, 
             Vector2 tex2,
             Vector2 tex3,
-            Vector2 tex4)
+            Vector2 tex4,
+            Point4<ushort> jointIndices,
+            Vector4 jointWeights)
         {
             Position = pos;
             Normal = norm;
@@ -36,6 +38,8 @@ namespace SimpleMesh
             Texture2 = tex2;
             Texture3 = tex3;
             Texture4 = tex4;
+            JointIndices = jointIndices;
+            JointWeights = jointWeights;
         }
 
         public bool Equals(Vertex other)
@@ -47,7 +51,9 @@ namespace SimpleMesh
                    Texture1.Equals(other.Texture1) &&
                    Texture2.Equals(other.Texture2) &&
                    Texture3.Equals(other.Texture3) &&
-                   Texture4.Equals(other.Texture4);
+                   Texture4.Equals(other.Texture4) &&
+                   JointIndices.Equals(other.JointIndices) &&
+                   JointWeights.Equals(other.JointWeights);
         }
 
         public override bool Equals(object obj)

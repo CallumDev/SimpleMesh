@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Numerics;
 using SimpleMesh.Util;
 
@@ -55,8 +56,10 @@ namespace SimpleMesh.Formats.SMesh
             }
         }
 
-        static void GetNodeStrings(StringBufferBuilder builder, ModelNode node)
+        static void TraverseNodeTree(StringBufferBuilder builder, Dictionary<ModelNode, int> indices, ModelNode node)
         {
+            var pos = indices.Count;
+            indices[node] = pos;
             builder.AddString(node.Name);
             foreach (var kv in node.Properties) {
                 builder.AddString(kv.Key);
@@ -65,7 +68,7 @@ namespace SimpleMesh.Formats.SMesh
             }
             foreach (var c in node.Children)
             {
-                GetNodeStrings(builder, c);
+                TraverseNodeTree(builder, indices, c);
             }
         }
         
@@ -79,6 +82,8 @@ namespace SimpleMesh.Formats.SMesh
             var ms = new MemoryStream();
             var writer = new BinaryWriter(ms);
 
+            Dictionary<ModelNode, int> nodeIndices = new();
+            
             var strBuffer = new StringBufferBuilder();
             strBuffer.AddString(model.Copyright);
             strBuffer.AddString(model.Generator);
@@ -97,9 +102,11 @@ namespace SimpleMesh.Formats.SMesh
                     strBuffer.AddString(g.Material?.Name);
                 }
             }
+            foreach (var sk in model.Skins)
+                strBuffer.AddString(sk.Name);
             foreach (var n in model.Roots)
             {
-                GetNodeStrings(strBuffer, n);
+                TraverseNodeTree(strBuffer, nodeIndices, n);
             }
             if (model.Images != null) {
                 foreach (var kv in model.Images) {
@@ -131,10 +138,54 @@ namespace SimpleMesh.Formats.SMesh
             {
                 WriteGeometry(g, writer, strBuffer);
             }
+            writer.Write7BitEncodedInt(model.Skins.Length);
+            foreach (var s in model.Skins)
+            {
+                strBuffer.WriteStringPos(writer, s.Name);
+                writer.Write7BitEncodedInt(s.Bones.Length);
+                // matrices
+                if (s.InverseBindMatrices.All(x => x == Matrix4x4.Identity))
+                    writer.Write((byte)0);
+                else
+                {
+                    writer.Write((byte)1);
+                    var f = new FloatBuffer(16, s.Bones.Length);
+                    for (int i = 0; i < s.InverseBindMatrices.Length; i++)
+                    {
+                        f[0, i] = s.InverseBindMatrices[i].M11;
+                        f[1, i] = s.InverseBindMatrices[i].M12;
+                        f[2, i] = s.InverseBindMatrices[i].M13;
+                        f[3, i] = s.InverseBindMatrices[i].M14;
+
+                        f[4, i] = s.InverseBindMatrices[i].M21;
+                        f[5, i] = s.InverseBindMatrices[i].M22;
+                        f[6, i] = s.InverseBindMatrices[i].M23;
+                        f[7, i] = s.InverseBindMatrices[i].M24;
+
+                        f[8, i] = s.InverseBindMatrices[i].M31;
+                        f[9, i] = s.InverseBindMatrices[i].M32;
+                        f[10, i] = s.InverseBindMatrices[i].M33;
+                        f[11, i] = s.InverseBindMatrices[i].M34;
+
+                        f[12, i] = s.InverseBindMatrices[i].M41;
+                        f[13, i] = s.InverseBindMatrices[i].M42;
+                        f[14, i] = s.InverseBindMatrices[i].M43;
+                        f[15, i] = s.InverseBindMatrices[i].M44;
+                    }
+                    f.Write(writer);
+                }
+                // references
+                if(s.Root == null)
+                    writer.Write7BitEncodedInt(0);
+                else
+                    writer.Write7BitEncodedInt(nodeIndices[s.Root] + 1);
+                foreach(var b in s.Bones)
+                    writer.Write7BitEncodedInt(nodeIndices[b]);
+            }
             writer.Write7BitEncodedInt(model.Roots.Length);
             foreach (var n in model.Roots)
             {
-                WriteNode(n, model.Geometries, writer, strBuffer);
+                WriteNode(n, model.Geometries, model.Skins, writer, strBuffer);
             }
             if (model.Images != null) {
                 writer.Write7BitEncodedInt(1 + model.Images.Count);
@@ -242,7 +293,7 @@ namespace SimpleMesh.Formats.SMesh
             }
         }
 
-        static void WriteNode(ModelNode n, Geometry[] geometries, BinaryWriter writer, StringBufferBuilder strBuffer)
+        static void WriteNode(ModelNode n, Geometry[] geometries, Skin[] skins, BinaryWriter writer, StringBufferBuilder strBuffer)
         {
             strBuffer.WriteStringPos(writer, n.Name);
             writer.Write7BitEncodedInt(n.Properties.Count);
@@ -258,29 +309,40 @@ namespace SimpleMesh.Formats.SMesh
             }
             if (n.Geometry == null)
             {
-                writer.Write((uint) 0);
-            } else
+                writer.Write7BitEncodedInt(0);
+            } 
+            else
             {
-                var idx = -1;
-                for (int i = 0; i < geometries.Length; i++)
-                {
-                    if (geometries[i] == n.Geometry) {
-                        idx = i;
-                        break;
-                    }
-                }
+                var idx = Array.IndexOf(geometries, n.Geometry);
                 if (idx == -1)
                 {
                     throw new Exception("All ModelNode geometries must be present in model geometry array");
                 }
                 else {
-                    writer.Write((uint)(idx + 1));
+                    writer.Write7BitEncodedInt(idx + 1);
                 }
             }
+
+            if (n.Skin == null)
+            {
+                writer.Write7BitEncodedInt(0);
+            }
+            else
+            {
+                var idx = Array.IndexOf(skins, n.Skin);
+                if (idx == -1)
+                {
+                    throw new Exception("All ModelNode skins must be present in model skins array");
+                }
+                else {
+                    writer.Write7BitEncodedInt(idx + 1);
+                }
+            }
+            
             writer.Write7BitEncodedInt(n.Children.Count);
             foreach (var child in n.Children)
             {
-                WriteNode(child, geometries, writer, strBuffer);
+                WriteNode(child, geometries, skins, writer, strBuffer);
             }
         }
 
@@ -288,7 +350,7 @@ namespace SimpleMesh.Formats.SMesh
         {
             strBuffer.WriteStringPos(writer, g.Name);
             writer.Write((byte)g.Kind);
-            writer.Write((ushort)g.Attributes);
+            writer.Write((ushort)g.Vertices.Descriptor.Attributes);
             writer.Write(g.Center);
             writer.Write(g.Radius);
             writer.Write(g.Min);
@@ -296,76 +358,96 @@ namespace SimpleMesh.Formats.SMesh
             writer.Write7BitEncodedInt(g.Groups.Length);
             foreach (var tg in g.Groups)
             {
-                writer.Write(tg.BaseVertex);
-                writer.Write(tg.StartIndex);
-                writer.Write(tg.IndexCount);
+                writer.Write7BitEncodedInt(tg.BaseVertex);
+                writer.Write7BitEncodedInt(tg.StartIndex);
+                writer.Write7BitEncodedInt(tg.IndexCount);
                 strBuffer.WriteStringPos(writer, tg.Material.Name);
             }
-            writer.Write7BitEncodedInt(g.Vertices.Length);
+            writer.Write7BitEncodedInt(g.Vertices.Count);
             int channels = 3;
-            if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
                 channels += 3;
-            if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
                 channels += 4;
-            if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
                 channels += 4;
-            if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
                 channels += 2;
-            if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
                 channels += 2;
-            if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
                 channels += 2;
-            if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
                 channels += 2;
-            FloatBuffer f = new FloatBuffer(channels, g.Vertices.Length);
-            for(int i = 0; i < g.Vertices.Length; i++)
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Joints) == VertexAttributes.Joints)
+                channels += 4;
+            FloatBuffer f = new FloatBuffer(channels, g.Vertices.Count);
+            for(int i = 0; i < g.Vertices.Count; i++)
             {
-                f.SetFloat(g.Vertices[i].Position.X, 0, i);
-                f.SetFloat(g.Vertices[i].Position.Y, 1, i);
-                f.SetFloat(g.Vertices[i].Position.Z, 2, i);
+                f.SetFloat(g.Vertices.Position[i].X, 0, i);
+                f.SetFloat(g.Vertices.Position[i].Y, 1, i);
+                f.SetFloat(g.Vertices.Position[i].Z, 2, i);
                 int c = 3;
-                if ((g.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
                 {
-                    f.SetFloat(g.Vertices[i].Normal.X, c++, i);
-                    f.SetFloat(g.Vertices[i].Normal.Y, c++, i);
-                    f.SetFloat(g.Vertices[i].Normal.Z, c++, i);
+                    f.SetFloat(g.Vertices.Normal[i].X, c++, i);
+                    f.SetFloat(g.Vertices.Normal[i].Y, c++, i);
+                    f.SetFloat(g.Vertices.Normal[i].Z, c++, i);
                 }
-                if ((g.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Diffuse) == VertexAttributes.Diffuse)
                 {
-                    f.SetFloat(g.Vertices[i].Diffuse.R, c++, i);
-                    f.SetFloat(g.Vertices[i].Diffuse.G, c++, i);
-                    f.SetFloat(g.Vertices[i].Diffuse.B, c++, i);
-                    f.SetFloat(g.Vertices[i].Diffuse.A, c++, i);
+                    f.SetFloat(g.Vertices.Diffuse[i].R, c++, i);
+                    f.SetFloat(g.Vertices.Diffuse[i].G, c++, i);
+                    f.SetFloat(g.Vertices.Diffuse[i].B, c++, i);
+                    f.SetFloat(g.Vertices.Diffuse[i].A, c++, i);
                 }
-                if ((g.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Tangent) == VertexAttributes.Tangent)
                 {
-                    f.SetFloat(g.Vertices[i].Tangent.X, c++, i);
-                    f.SetFloat(g.Vertices[i].Tangent.Y, c++, i);
-                    f.SetFloat(g.Vertices[i].Tangent.Z, c++, i);
-                    f.SetFloat(g.Vertices[i].Tangent.W, c++, i);
+                    f.SetFloat(g.Vertices.Tangent[i].X, c++, i);
+                    f.SetFloat(g.Vertices.Tangent[i].Y, c++, i);
+                    f.SetFloat(g.Vertices.Tangent[i].Z, c++, i);
+                    f.SetFloat(g.Vertices.Tangent[i].W, c++, i);
                 }
-                if ((g.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture1) == VertexAttributes.Texture1)
                 {
-                    f.SetFloat(g.Vertices[i].Texture1.X, c++, i);
-                    f.SetFloat(g.Vertices[i].Texture1.Y, c++, i);
+                    f.SetFloat(g.Vertices.Texture1[i].X, c++, i);
+                    f.SetFloat(g.Vertices.Texture1[i].Y, c++, i);
                 }
-                if ((g.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture2) == VertexAttributes.Texture2)
                 {
-                    f.SetFloat(g.Vertices[i].Texture2.X, c++, i);
-                    f.SetFloat(g.Vertices[i].Texture2.Y, c++, i);
+                    f.SetFloat(g.Vertices.Texture2[i].X, c++, i);
+                    f.SetFloat(g.Vertices.Texture2[i].Y, c++, i);
                 }
-                if ((g.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture3) == VertexAttributes.Texture3)
                 {
-                    f.SetFloat(g.Vertices[i].Texture3.X, c++, i);
-                    f.SetFloat(g.Vertices[i].Texture3.Y, c++, i);
+                    f.SetFloat(g.Vertices.Texture3[i].X, c++, i);
+                    f.SetFloat(g.Vertices.Texture3[i].Y, c++, i);
                 }
-                if ((g.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Texture4) == VertexAttributes.Texture4)
                 {
-                    f.SetFloat(g.Vertices[i].Texture4.X, c++, i);
-                    f.SetFloat(g.Vertices[i].Texture4.Y, c++, i);
+                    f.SetFloat(g.Vertices.Texture4[i].X, c++, i);
+                    f.SetFloat(g.Vertices.Texture4[i].Y, c++, i);
+                }
+                if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Joints) == VertexAttributes.Joints)
+                {
+                    f.SetFloat(g.Vertices.JointWeights[i].X, c++, i);
+                    f.SetFloat(g.Vertices.JointWeights[i].Y, c++, i);
+                    f.SetFloat(g.Vertices.JointWeights[i].Z, c++, i);
+                    f.SetFloat(g.Vertices.JointWeights[i].W, c++, i);
                 }
             }
             f.Write(writer);
+            if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Joints) == VertexAttributes.Joints)
+            {
+                for (int i = 0; i < g.Vertices.Count; i++)
+                {
+                    var idx = g.Vertices.JointIndices[i];
+                    writer.Write(idx.A);
+                    writer.Write(idx.B);
+                    writer.Write(idx.C);
+                    writer.Write(idx.D);
+                }
+            }
             if (g.Indices.Indices16 != null) {
                 writer.Write((byte)0);
                 IndexCoding.Encode16(g.Indices.Indices16, writer);

@@ -27,7 +27,7 @@ namespace SimpleMesh.Formats.Obj
             
             rootNode.Name = "default";
             ModelNode currentNode = rootNode;
-            VertexBufferBuilder currentVertex = new VertexBufferBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
+            VertexArrayBuilder currentVertex = new VertexArrayBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
             List<uint> currentIndices = new List<uint>();
             List<TriangleGroup> currentGroups = new List<TriangleGroup>();
             VertexAttributes attributes = VertexAttributes.Position;
@@ -257,8 +257,7 @@ namespace SimpleMesh.Formats.Obj
                             }
 
                             currentNode.Geometry = new Geometry();
-                            currentNode.Geometry.Attributes = attributes;
-                            currentNode.Geometry.Vertices = currentVertex.GetVertices();
+                            currentNode.Geometry.Vertices = currentVertex.Finish();
                             currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
                             currentNode.Geometry.Groups = currentGroups.ToArray();
                             currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
@@ -274,7 +273,7 @@ namespace SimpleMesh.Formats.Obj
                             currentNode = new ModelNode() { Name = objname.ToString() };
                         }
                         isL = isF = false;
-                        currentVertex = new VertexBufferBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
+                        currentVertex = new VertexArrayBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
                         currentIndices = new List<uint>();
                         currentGroups = new List<TriangleGroup>();
                         attributes = VertexAttributes.Position;
@@ -316,8 +315,8 @@ namespace SimpleMesh.Formats.Obj
             if (currentIndices.Count > 0)
             {
                 currentNode.Geometry = new Geometry();
-                currentNode.Geometry.Attributes = attributes;
-                currentNode.Geometry.Vertices = currentVertex.GetVertices();
+                currentNode.Geometry.Vertices = currentVertex.Finish();
+                currentNode.Geometry.Vertices.ChangeAttributes(attributes);
                 currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
                 currentNode.Geometry.Groups = currentGroups.ToArray();
                 currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
