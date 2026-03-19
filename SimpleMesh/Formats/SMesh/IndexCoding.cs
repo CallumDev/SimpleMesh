@@ -20,7 +20,7 @@ namespace SimpleMesh.Formats.SMesh
         //4+5th bit = 1-4 extra bytes
         public static void Encode32(uint[] indices, BinaryWriter writer)
         {
-            writer.Write7BitEncodedInt(indices.Length);
+            writer.WriteVarUInt32((uint)indices.Length);
             if (indices.Length == 0)
                 return;
             writer.Write(indices[0]);
@@ -95,7 +95,7 @@ namespace SimpleMesh.Formats.SMesh
         
         public static uint[] Decode32(BinaryReader reader)
         {
-            var indices = new uint[reader.Read7BitEncodedInt()];
+            var indices = new uint[(int)reader.ReadVarUInt32()];
             if (indices.Length == 0)
                 return indices;
             indices[0] = reader.ReadUInt32();
@@ -163,7 +163,7 @@ namespace SimpleMesh.Formats.SMesh
         //4th bit = 1 or 2 extra bytes
         public static void Encode16(ushort[] indices, BinaryWriter writer)
         {
-            writer.Write7BitEncodedInt(indices.Length);
+            writer.WriteVarUInt32((uint)indices.Length);
             if (indices.Length == 0)
                 return;
             writer.Write(indices[0]);
@@ -224,7 +224,7 @@ namespace SimpleMesh.Formats.SMesh
         
         public static ushort[] Decode16(BinaryReader reader)
         {
-            var indices = new ushort[reader.Read7BitEncodedInt()];
+            var indices = new ushort[(int)reader.ReadVarUInt32()];
             if (indices.Length == 0)
                 return indices;
             indices[0] = reader.ReadUInt16();

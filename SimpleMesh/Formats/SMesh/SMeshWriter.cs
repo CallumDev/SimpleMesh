@@ -37,21 +37,21 @@ namespace SimpleMesh.Formats.SMesh
             {
                 if (str == null)
                 {
-                    writer.Write7BitEncodedInt(0);
+                    writer.WriteVarUInt32(0);
                 }
                 else if (str == "") 
                 {
-                    writer.Write7BitEncodedInt(1);
+                    writer.WriteVarUInt32(1);
                 }
                 else
                 {
-                    writer.Write7BitEncodedInt(strings[str] + 2);
+                    writer.WriteVarUInt32((uint)strings[str] + 2);
                 }
             }
 
             public void WriteBuffer(BinaryWriter writer)
             {
-                writer.Write7BitEncodedInt(strings.Count);
+                writer.WriteVarUInt32((uint)strings.Count);
                 writer.Write(stream.ToArray());
             }
         }
@@ -119,7 +119,7 @@ namespace SimpleMesh.Formats.SMesh
 
             strBuffer.WriteStringPos(writer, model.Copyright);
             strBuffer.WriteStringPos(writer, model.Generator);
-            writer.Write7BitEncodedInt(model.Materials.Count);
+            writer.WriteVarUInt32((uint)model.Materials.Count);
             foreach (var m in model.Materials.Values)
             {
                 strBuffer.WriteStringPos(writer, m.Name);
@@ -133,16 +133,16 @@ namespace SimpleMesh.Formats.SMesh
                 writer.Write(m.RoughnessFactor);
                 WriteTexInfo(writer, strBuffer, m.MetallicRoughnessTexture);
             }
-            writer.Write7BitEncodedInt(model.Geometries.Length);
+            writer.WriteVarUInt32((uint)model.Geometries.Length);
             foreach (var g in model.Geometries)
             {
                 WriteGeometry(g, writer, strBuffer);
             }
-            writer.Write7BitEncodedInt(model.Skins.Length);
+            writer.WriteVarUInt32((uint)model.Skins.Length);
             foreach (var s in model.Skins)
             {
                 strBuffer.WriteStringPos(writer, s.Name);
-                writer.Write7BitEncodedInt(s.Bones.Length);
+                writer.WriteVarUInt32((uint)s.Bones.Length);
                 // matrices
                 if (s.InverseBindMatrices.All(x => x == Matrix4x4.Identity))
                     writer.Write((byte)0);
@@ -176,41 +176,41 @@ namespace SimpleMesh.Formats.SMesh
                 }
                 // references
                 if(s.Root == null)
-                    writer.Write7BitEncodedInt(0);
+                    writer.WriteVarUInt32(0);
                 else
-                    writer.Write7BitEncodedInt(nodeIndices[s.Root] + 1);
+                    writer.WriteVarUInt32((uint)nodeIndices[s.Root] + 1);
                 foreach(var b in s.Bones)
-                    writer.Write7BitEncodedInt(nodeIndices[b]);
+                    writer.WriteVarUInt32((uint)nodeIndices[b]);
             }
-            writer.Write7BitEncodedInt(model.Roots.Length);
+            writer.WriteVarUInt32((uint)model.Roots.Length);
             foreach (var n in model.Roots)
             {
                 WriteNode(n, model.Geometries, model.Skins, writer, strBuffer);
             }
             if (model.Images != null) {
-                writer.Write7BitEncodedInt(1 + model.Images.Count);
+                writer.WriteVarUInt32((uint)(1 + model.Images.Count));
                 foreach (var kv in model.Images) {
                     strBuffer.WriteStringPos(writer, kv.Key);
                     strBuffer.WriteStringPos(writer, kv.Value.MimeType);
-                    writer.Write7BitEncodedInt(kv.Value.Data.Length);
+                    writer.WriteVarUInt32((uint)kv.Value.Data.Length);
                     writer.Write(kv.Value.Data);
                 }
             }
             else
             {
-                writer.Write7BitEncodedInt(0);
+                writer.WriteVarUInt32(0);
             }
 
             if (model.Animations != null)
             {
-                writer.Write7BitEncodedInt(1 + model.Animations.Length);
+                writer.WriteVarUInt32((uint)(1 + model.Animations.Length));
                 foreach (var anim in model.Animations)
                 {
                     strBuffer.WriteStringPos(writer, anim.Name);
-                    writer.Write7BitEncodedInt(anim.Rotations.Length);
+                    writer.WriteVarUInt32((uint)anim.Rotations.Length);
                     foreach (var rot in anim.Rotations) {
                         strBuffer.WriteStringPos(writer, rot.Target);
-                        writer.Write7BitEncodedInt(rot.Keyframes.Length);
+                        writer.WriteVarUInt32((uint)rot.Keyframes.Length);
                         foreach (var kf in rot.Keyframes) {
                             writer.Write(kf.Time);
                             writer.Write(kf.Rotation.X);
@@ -219,10 +219,10 @@ namespace SimpleMesh.Formats.SMesh
                             writer.Write(kf.Rotation.W);
                         }
                     }
-                    writer.Write7BitEncodedInt(anim.Translations.Length);
+                    writer.WriteVarUInt32((uint)anim.Translations.Length);
                     foreach (var tr in anim.Translations) {
                         strBuffer.WriteStringPos(writer, tr.Target);
-                        writer.Write7BitEncodedInt(tr.Keyframes.Length);
+                        writer.WriteVarUInt32((uint)tr.Keyframes.Length);
                         foreach (var kf in tr.Keyframes) {
                             writer.Write(kf.Time);
                             writer.Write(kf.Translation.X);
@@ -234,7 +234,7 @@ namespace SimpleMesh.Formats.SMesh
             }
             else
             {
-                writer.Write7BitEncodedInt(0);
+                writer.WriteVarUInt32(0);
             }
 
             ms.Position = 0;
@@ -275,12 +275,12 @@ namespace SimpleMesh.Formats.SMesh
                     break;
                 case int[] ia:
                     writer.Write((byte) PropertyKind.IntArray);
-                    writer.Write7BitEncodedInt(ia.Length);
+                    writer.WriteVarUInt32((uint)ia.Length);
                     foreach(var i in ia) writer.Write(i);
                     break;
                 case float[] fa:
                     writer.Write((byte)PropertyKind.FloatArray);
-                    writer.Write7BitEncodedInt(fa.Length);
+                    writer.WriteVarUInt32((uint)fa.Length);
                     foreach(var f in fa) writer.Write(f);
                     break;
                 case Vector3 v3:
@@ -296,7 +296,7 @@ namespace SimpleMesh.Formats.SMesh
         static void WriteNode(ModelNode n, Geometry[] geometries, Skin[] skins, BinaryWriter writer, StringBufferBuilder strBuffer)
         {
             strBuffer.WriteStringPos(writer, n.Name);
-            writer.Write7BitEncodedInt(n.Properties.Count);
+            writer.WriteVarUInt32((uint)n.Properties.Count);
             foreach (var kv in n.Properties) {
                 strBuffer.WriteStringPos(writer, kv.Key);
                 WriteProperty(kv.Value, strBuffer, writer);
@@ -309,7 +309,7 @@ namespace SimpleMesh.Formats.SMesh
             }
             if (n.Geometry == null)
             {
-                writer.Write7BitEncodedInt(0);
+                writer.WriteVarUInt32(0);
             } 
             else
             {
@@ -319,13 +319,13 @@ namespace SimpleMesh.Formats.SMesh
                     throw new Exception("All ModelNode geometries must be present in model geometry array");
                 }
                 else {
-                    writer.Write7BitEncodedInt(idx + 1);
+                    writer.WriteVarUInt32((uint)idx + 1);
                 }
             }
 
             if (n.Skin == null)
             {
-                writer.Write7BitEncodedInt(0);
+                writer.WriteVarUInt32(0);
             }
             else
             {
@@ -335,11 +335,11 @@ namespace SimpleMesh.Formats.SMesh
                     throw new Exception("All ModelNode skins must be present in model skins array");
                 }
                 else {
-                    writer.Write7BitEncodedInt(idx + 1);
+                    writer.WriteVarUInt32((uint)idx + 1);
                 }
             }
             
-            writer.Write7BitEncodedInt(n.Children.Count);
+            writer.WriteVarUInt32((uint)n.Children.Count);
             foreach (var child in n.Children)
             {
                 WriteNode(child, geometries, skins, writer, strBuffer);
@@ -355,15 +355,15 @@ namespace SimpleMesh.Formats.SMesh
             writer.Write(g.Radius);
             writer.Write(g.Min);
             writer.Write(g.Max);
-            writer.Write7BitEncodedInt(g.Groups.Length);
+            writer.WriteVarUInt32((uint)g.Groups.Length);
             foreach (var tg in g.Groups)
             {
-                writer.Write7BitEncodedInt(tg.BaseVertex);
-                writer.Write7BitEncodedInt(tg.StartIndex);
-                writer.Write7BitEncodedInt(tg.IndexCount);
+                writer.WriteVarUInt32((uint)tg.BaseVertex);
+                writer.WriteVarUInt32((uint)tg.StartIndex);
+                writer.WriteVarUInt32((uint)tg.IndexCount);
                 strBuffer.WriteStringPos(writer, tg.Material.Name);
             }
-            writer.Write7BitEncodedInt(g.Vertices.Count);
+            writer.WriteVarUInt32((uint)g.Vertices.Count);
             int channels = 3;
             if ((g.Vertices.Descriptor.Attributes & VertexAttributes.Normal) == VertexAttributes.Normal)
                 channels += 3;

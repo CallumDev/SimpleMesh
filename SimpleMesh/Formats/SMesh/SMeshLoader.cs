@@ -10,7 +10,7 @@ namespace SimpleMesh.Formats.SMesh
     {
         static string GetString(BinaryReader reader, string[] strings)
         {
-            var i = reader.Read7BitEncodedInt();
+            var i = (int)reader.ReadVarUInt32();
             if (i == 0) return null;
             if (i == 1) return "";
             return strings[i - 2];
@@ -31,14 +31,14 @@ namespace SimpleMesh.Formats.SMesh
             using var comp = new DeflateStream(stream, CompressionMode.Decompress);
             using var reader = new BinaryReader(comp);
             var model = new Model();
-            var strCount = reader.Read7BitEncodedInt();
+            var strCount = (int)reader.ReadVarUInt32();
             var strings = new string[strCount];
             for (int i = 0; i < strings.Length; i++)
                 strings[i] = reader.ReadStringUTF8();
 
             model.Copyright = GetString(reader, strings);
             model.Generator = GetString(reader, strings);
-            var matCount = reader.Read7BitEncodedInt();
+            var matCount = (int)reader.ReadVarUInt32();
             model.Materials = new Dictionary<string, Material>(matCount);
             for (int i = 0; i < matCount; i++)
             {
@@ -58,20 +58,20 @@ namespace SimpleMesh.Formats.SMesh
                 model.Materials.Add(mat.Name, mat);
             }
 
-            model.Geometries = new Geometry[reader.Read7BitEncodedInt()];
+            model.Geometries = new Geometry[(int)reader.ReadVarUInt32()];
             for (int i = 0; i < model.Geometries.Length; i++)
             {
                 model.Geometries[i] = ReadGeometry(reader, model.Materials, strings);
             }
 
-            model.Skins = new Skin[reader.Read7BitEncodedInt()];
+            model.Skins = new Skin[(int)reader.ReadVarUInt32()];
             var refs = new SkinRefs[model.Skins.Length];
             for (int i = 0; i < model.Geometries.Length; i++)
             {
                 // Concrete data
                 model.Skins[i] = new();
                 model.Skins[i].Name = GetString(reader, strings);
-                var boneCount = reader.Read7BitEncodedInt();
+                var boneCount = (int)reader.ReadVarUInt32();
                 model.Skins[i].InverseBindMatrices = new Matrix4x4[boneCount];
                 bool hasInvBindPose = reader.ReadByte() != 0;
                 if (hasInvBindPose)
@@ -95,15 +95,15 @@ namespace SimpleMesh.Formats.SMesh
                 }
 
                 // References
-                var r = reader.Read7BitEncodedInt();
+                var r = (int)reader.ReadVarUInt32();
                 var joints = new int[boneCount];
                 for (int j = 0; j < joints.Length; j++)
-                    joints[j] = reader.Read7BitEncodedInt();
+                    joints[j] = (int)reader.ReadVarUInt32();
                 refs[i] = new(r, joints);
             }
 
             List<ModelNode> allNodes = new();
-            model.Roots = new ModelNode[reader.Read7BitEncodedInt()];
+            model.Roots = new ModelNode[(int)reader.ReadVarUInt32()];
             for (int i = 0; i < model.Roots.Length; i++)
             {
                 model.Roots[i] = ReadNode(reader, model.Geometries, model.Skins, allNodes, strings);
@@ -122,7 +122,7 @@ namespace SimpleMesh.Formats.SMesh
                 }
             }
 
-            var imageCount = reader.Read7BitEncodedInt();
+            var imageCount = (int)reader.ReadVarUInt32();
             if (imageCount != 0)
             {
                 imageCount--;
@@ -131,13 +131,13 @@ namespace SimpleMesh.Formats.SMesh
                 {
                     var name = GetString(reader, strings);
                     var mime = GetString(reader, strings);
-                    var len = reader.Read7BitEncodedInt();
+                    var len = (int)reader.ReadVarUInt32();
                     var data = reader.ReadBytes(len);
                     model.Images[name] = new ImageData(name, data, mime);
                 }
             }
 
-            var animationCount = reader.Read7BitEncodedInt();
+            var animationCount = (int)reader.ReadVarUInt32();
             if (animationCount != 0)
             {
                 animationCount--;
@@ -146,12 +146,12 @@ namespace SimpleMesh.Formats.SMesh
                 {
                     var anm = new Animation();
                     anm.Name = GetString(reader, strings);
-                    anm.Rotations = new RotationChannel[reader.Read7BitEncodedInt()];
+                    anm.Rotations = new RotationChannel[(int)reader.ReadVarUInt32()];
                     for (int j = 0; j < anm.Rotations.Length; j++)
                     {
                         var r = new RotationChannel();
                         r.Target = GetString(reader, strings);
-                        r.Keyframes = new RotationKeyframe[reader.Read7BitEncodedInt()];
+                        r.Keyframes = new RotationKeyframe[(int)reader.ReadVarUInt32()];
                         for (int k = 0; k < r.Keyframes.Length; k++)
                         {
                             r.Keyframes[k].Time = reader.ReadSingle();
@@ -163,12 +163,12 @@ namespace SimpleMesh.Formats.SMesh
                         anm.Rotations[j] = r;
                     }
 
-                    anm.Translations = new TranslationChannel[reader.Read7BitEncodedInt()];
+                    anm.Translations = new TranslationChannel[(int)reader.ReadVarUInt32()];
                     for (int j = 0; j < anm.Translations.Length; j++)
                     {
                         var t = new TranslationChannel();
                         t.Target = GetString(reader, strings);
-                        t.Keyframes = new TranslationKeyframe[reader.Read7BitEncodedInt()];
+                        t.Keyframes = new TranslationKeyframe[(int)reader.ReadVarUInt32()];
                         for (int k = 0; k < t.Keyframes.Length; k++)
                         {
                             t.Keyframes[k].Time = reader.ReadSingle();
@@ -203,13 +203,13 @@ namespace SimpleMesh.Formats.SMesh
                 case PropertyKind.Float:
                     return new PropertyValue(reader.ReadSingle());
                 case PropertyKind.FloatArray:
-                    var fa = new float[reader.Read7BitEncodedInt()];
+                    var fa = new float[(int)reader.ReadVarUInt32()];
                     for (int i = 0; i < fa.Length; i++) fa[i] = reader.ReadSingle();
                     return new PropertyValue(fa);
                 case PropertyKind.Int:
                     return new PropertyValue(reader.ReadInt32());
                 case PropertyKind.IntArray:
-                    var ia = new int[reader.Read7BitEncodedInt()];
+                    var ia = new int[(int)reader.ReadVarUInt32()];
                     for (int i = 0; i < ia.Length; i++) ia[i] = reader.ReadInt32();
                     return new PropertyValue(ia);
                 case PropertyKind.String:
@@ -227,7 +227,7 @@ namespace SimpleMesh.Formats.SMesh
             var node = new ModelNode();
             allNodes.Add(node); // index by write order
             node.Name = GetString(reader, strings);
-            int propCount = reader.Read7BitEncodedInt();
+            int propCount = (int)reader.ReadVarUInt32();
             node.Properties = new Dictionary<string, PropertyValue>(propCount);
             for (int i = 0; i < propCount; i++)
             {
@@ -236,19 +236,19 @@ namespace SimpleMesh.Formats.SMesh
 
             var tr = reader.ReadByte();
             if (tr != 0) node.Transform = reader.ReadMatrix4x4();
-            var g = reader.Read7BitEncodedInt();
+            var g = (int)reader.ReadVarUInt32();
             if (g != 0)
             {
                 node.Geometry = geometries[g - 1];
             }
 
-            var s = reader.Read7BitEncodedInt();
+            var s = (int)reader.ReadVarUInt32();
             if (s != 0)
             {
                 node.Skin = skins[s - 1];
             }
 
-            var childCount = reader.Read7BitEncodedInt();
+            var childCount = (int)reader.ReadVarUInt32();
             node.Children = new List<ModelNode>(childCount);
             for (int i = 0; i < childCount; i++)
                 node.Children.Add(ReadNode(reader, geometries, skins, allNodes, strings));
@@ -265,14 +265,14 @@ namespace SimpleMesh.Formats.SMesh
             g.Radius = reader.ReadSingle();
             g.Min = reader.ReadVector3();
             g.Max = reader.ReadVector3();
-            g.Groups = new TriangleGroup[reader.Read7BitEncodedInt()];
+            g.Groups = new TriangleGroup[(int)reader.ReadVarUInt32()];
             for (int i = 0; i < g.Groups.Length; i++)
             {
                 g.Groups[i] = new TriangleGroup()
                 {
-                    BaseVertex = reader.Read7BitEncodedInt(),
-                    StartIndex = reader.Read7BitEncodedInt(),
-                    IndexCount = reader.Read7BitEncodedInt()
+                    BaseVertex = (int)reader.ReadVarUInt32(),
+                    StartIndex = (int)reader.ReadVarUInt32(),
+                    IndexCount = (int)reader.ReadVarUInt32()
                 };
                 var matname = GetString(reader, strings);
                 if (!mats.TryGetValue(matname, out g.Groups[i].Material))
@@ -281,7 +281,7 @@ namespace SimpleMesh.Formats.SMesh
                 }
             }
 
-            g.Vertices = new VertexArray(attrs, reader.Read7BitEncodedInt());
+            g.Vertices = new VertexArray(attrs, (int)reader.ReadVarUInt32());
             int channels = 3;
             if ((attrs & VertexAttributes.Normal) == VertexAttributes.Normal)
                 channels += 3;
