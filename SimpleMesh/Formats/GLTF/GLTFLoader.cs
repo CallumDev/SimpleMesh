@@ -266,10 +266,9 @@ namespace SimpleMesh.Formats.GLTF
                 k++;
             }
 
-
-
             var nodes = new GLTFNode[nodesElement.GetArrayLength()];
             k = 0;
+
             foreach (var n in nodesElement.EnumerateArray())
             {
                 nodes[k] = new GLTFNode();
@@ -279,21 +278,40 @@ namespace SimpleMesh.Formats.GLTF
                     nodes[k].Geometry = meshes[meshElement.GetInt32()];
                 if (n.TryGetProperty("skin", out var skinElem))
                     nodes[k].Skin = skinElem.GetInt32();
-                Vector3 translation = Vector3.Zero;
-                Vector3 scale = Vector3.One;
-                Quaternion rotation = Quaternion.Identity;
                 string errName = string.IsNullOrEmpty(nodes[k].Name) ? "NONAME" : $"'{nodes[k].Name}'";
-                if (n.TryGetProperty("translation", out var trElem) &&
-                    !TryGetVector3(trElem, out translation))
-                    throw new ModelLoadException($"node {errName} has malformed translation element");
-                if (n.TryGetProperty("rotation", out var rotElem) &&
-                    !TryGetQuaternion(rotElem, out rotation))
-                    throw new ModelLoadException($"node {errName} has malformed rotation element");
-                if (n.TryGetProperty("scale", out var scElem) &&
-                    !TryGetVector3(scElem, out scale))
-                    throw new ModelLoadException($"node {errName} has malformed scale element");
-                nodes[k].Transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) *
-                                     Matrix4x4.CreateTranslation(translation);
+                if (n.TryGetProperty("matrix", out var matrixElement))
+                {
+                    if(matrixElement.GetArrayLength() != 16)
+                        throw new ModelLoadException($"node {errName} has malformed matrix element");
+                    nodes[k].Transform = new(
+                        matrixElement[0].GetSingle(), matrixElement[1].GetSingle(),
+                        matrixElement[2].GetSingle(), matrixElement[3].GetSingle(),
+                        matrixElement[4].GetSingle(), matrixElement[5].GetSingle(),
+                        matrixElement[6].GetSingle(), matrixElement[7].GetSingle(),
+                        matrixElement[8].GetSingle(), matrixElement[9].GetSingle(),
+                        matrixElement[10].GetSingle(), matrixElement[11].GetSingle(),
+                        matrixElement[12].GetSingle(), matrixElement[13].GetSingle(),
+                        matrixElement[14].GetSingle(), matrixElement[15].GetSingle()
+                    );
+                }
+                else
+                {
+                    Vector3 translation = Vector3.Zero;
+                    Vector3 scale = Vector3.One;
+                    Quaternion rotation = Quaternion.Identity;
+                    if (n.TryGetProperty("translation", out var trElem) &&
+                        !TryGetVector3(trElem, out translation))
+                        throw new ModelLoadException($"node {errName} has malformed translation element");
+                    if (n.TryGetProperty("rotation", out var rotElem) &&
+                        !TryGetQuaternion(rotElem, out rotation))
+                        throw new ModelLoadException($"node {errName} has malformed rotation element");
+                    if (n.TryGetProperty("scale", out var scElem) &&
+                        !TryGetVector3(scElem, out scale))
+                        throw new ModelLoadException($"node {errName} has malformed scale element");
+                    nodes[k].Transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) *
+                                         Matrix4x4.CreateTranslation(translation);
+                }
+
                 if (n.TryGetProperty("children", out var childElem))
                 {
                     foreach(var child in childElem.EnumerateArray())

@@ -142,6 +142,7 @@ namespace SampleOpenTK
         {
             if (model == null) return;
             using var stream = File.Create(filename);
+            model!.Generator = "SimpleMesh Demo";
             model!.SaveTo(stream, format);
         }
 
