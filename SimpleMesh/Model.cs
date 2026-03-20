@@ -23,14 +23,17 @@ namespace SimpleMesh
         public string? Copyright;
         public string? Generator;
 
-        public static Model FromStream(Stream stream, IExternalResources? resources = null)
+        public static Model FromStream(Stream stream, IExternalResources? resources = null, List<string>? warnings = null)
         {
-            return Autodetect.Load(stream, new ModelLoadContext() { ExternalResources = resources ?? new DisallowedResources() });
+            return Autodetect.Load(stream, new ModelLoadContext(warnings ?? [])
+            {
+                ExternalResources = resources ?? new DisallowedResources()
+            });
         }
-        public static Model FromFile(string filename)
+        public static Model FromFile(string filename, List<string>? warnings = null)
         {
             using var stream = File.OpenRead(filename);
-            return FromStream(stream, new FileResources(filename));
+            return FromStream(stream, new FileResources(filename), warnings);
         }
 
         public Model AutoselectRoot(out bool success)

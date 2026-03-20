@@ -32,7 +32,6 @@ namespace SimpleMesh.Formats.Obj
             List<TriangleGroup> currentGroups = new List<TriangleGroup>();
             VertexAttributes attributes = VertexAttributes.Position;
             string? currentMaterial = null;
-            bool warnedNonPolygonal = false;
             int lastIndex = 0;
 
             Dictionary<string, ObjMaterial> srcMaterials = new();
@@ -62,9 +61,11 @@ namespace SimpleMesh.Formats.Obj
             Span<float> norm = stackalloc float[3];
             Span<float> tex = stackalloc float[2];
 
-            Span<ParseHelpers.SplitElement> maxFacePoints = stackalloc ParseHelpers.SplitElement[512];
-            Span<ObjVertex> faceElements = stackalloc ObjVertex[512];
-            Span<ObjVertex> triangulatedElements = stackalloc ObjVertex[512];
+            Span<ParseHelpers.SplitElement> maxFacePoints = stackalloc ParseHelpers.SplitElement[128];
+            Span<ObjVertex> faceElements = stackalloc ObjVertex[128];
+            Span<Vector3> inputPositions = stackalloc Vector3[128];
+            Span<int> triangulatedIndices = stackalloc int[128];
+            Span<ObjVertex> triangulatedElements = stackalloc ObjVertex[256];
 
             bool isL = false, isF = false;
 
@@ -201,30 +202,22 @@ namespace SimpleMesh.Formats.Obj
                         faceElements[i] = ParseVertex(param.Slice(maxFacePoints[i].Start, maxFacePoints[i].Length), lineNo);
                     }
                     Span<ObjVertex> vtx = faceElements.Slice(0, fCount);
+                    Span<Vector3> p = inputPositions.Slice(0, fCount);
                     if(vtx.Length < 3)
                         throw new ModelLoadException($"Bad face element at line {lineNo}");
                     for (int i = 0; i < vtx.Length; i++)
                     {
                         if(!ResolveVertex(ref vtx[i], positions.Count, normals.Count, texcoords.Count))
                             throw new ModelLoadException($"Bad face element at line {lineNo}");
+                        p[i] = positions[vtx[i].Position];
                     }
-                    if (vtx.Length > 3) {
-                        if (!warnedNonPolygonal)
-                        {
-                            warnedNonPolygonal = true;
-                            ctx.Warn("Obj", $"File contains non-triangle polys @ {lineNo}, triangulating - assumed coplanar.");
-                        }
-                        int oidx = 0;
-                        for (int i = 1; i < vtx.Length - 1; i++)
-                        {
-                            if (oidx + 3 >= triangulatedElements.Length)
-                                throw new ModelLoadException($"Too many elements for face f on line {lineNo}");
-                            triangulatedElements[oidx++] = vtx[0];
-                            triangulatedElements[oidx++] = vtx[i];
-                            triangulatedElements[oidx++] = vtx[i + 1];
-                        }
-                        vtx = triangulatedElements.Slice(0, oidx);
+
+                    int idxCount = Triangulation.Triangulate(p, triangulatedIndices);
+                    for (int i = 0; i < idxCount; i++)
+                    {
+                        triangulatedElements[i] = vtx[triangulatedIndices[i]];
                     }
+                    vtx = triangulatedElements.Slice(0, idxCount);
                     for (int i = 0; i < vtx.Length; i++)
                     {
                         var ov = vtx[i];

@@ -148,13 +148,16 @@ namespace SampleOpenTK
         void LoadModel(string filename)
         {
             var sw = Stopwatch.StartNew();
-            var m = Model.FromFile(filename)
+            List<string> warnings = [];
+            var m = Model.FromFile(filename, warnings)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
                 .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
                 .CalculateNormals() // Calculate missing normals
                 .CalculateTangents(false, true) // Calculate missing tangents
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
+            foreach(var w in warnings)
+                Console.WriteLine(w);
             openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";
             if (m.Generator != null)
             {
