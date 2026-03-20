@@ -650,14 +650,9 @@ internal static class GLTFWriter
         {
             var byteStart = (int)BufferWriter.BaseStream.Position;
             var byteLength = source.Length * 64;
-            var min = new GLTFMatrix(float.MaxValue);
-            var max = new GLTFMatrix(float.MinValue);
             for (int i = 0; i < source.Length; i++)
             {
-                ref var src = ref GLTFMatrix.Cast(ref source[i]);
-                min = GLTFMatrix.Min(min, src);
-                max = GLTFMatrix.Max(max, src);
-                BufferWriter.Write(MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref src, 1)));
+                BufferWriter.Write(MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref source[i], 1)));
             }
             Accessors.Add(new JsonObject
             {
@@ -665,8 +660,6 @@ internal static class GLTFWriter
                 { "componentType", 5126 }, //float
                 { "count", source.Length },
                 { "type", "MAT4" },
-                { "min", min.ToJsonArray() },
-                { "max", max.ToJsonArray() }
             });
             return Accessors.Count - 1;
         }
