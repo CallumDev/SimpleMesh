@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 
 using System.Text.RegularExpressions;
@@ -21,7 +22,7 @@ static class UriTools
 
     private static Regex dataUriRegex = new Regex(@"^data:(.*);(.*),");
     
-    static bool IsDataUri(string uri, out string mime, out int len)
+    static bool IsDataUri(string uri, [NotNullWhen(true)]out string? mime, out int len)
     {
         var match = dataUriRegex.Match(uri);
         if (match.Success)
@@ -37,7 +38,7 @@ static class UriTools
 
     public static string MimeTypeFromUri(string str)
     {
-        if (IsDataUri(str, out string mime, out _))
+        if (IsDataUri(str, out var mime, out _))
             return mime;
         var ext = Path.GetExtension(str);
         if (".png".Equals(ext, StringComparison.OrdinalIgnoreCase))
@@ -49,7 +50,7 @@ static class UriTools
 
     public static string NameFromUri(string str, ref int counter)
     {
-        if (IsDataUri(str, out string mime, out _))
+        if (IsDataUri(str, out var mime, out _))
         {
             if (mime.Equals("image/png", StringComparison.OrdinalIgnoreCase))
                 return $"texture{counter++}.png";

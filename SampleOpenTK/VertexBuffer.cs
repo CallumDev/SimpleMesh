@@ -20,7 +20,7 @@ public class VertexBuffer : IDisposable
 
     private int vertexCount = 0;
 
-    public (int VertexOffset, int IndexOffset) Add(Geometry g)
+    public BufferOffset Add(Geometry g)
     {
         var vo = vertexCount;
         var io = Indices.Count;
@@ -33,11 +33,11 @@ public class VertexBuffer : IDisposable
         }
         else
         {
-            foreach (var i in g.Indices.Indices16)
+            foreach (var i in g.Indices.Indices16!)
                 Indices.Add(i);
         }
 
-        return (vo, io);
+        return new (this, vo, io);
     }
 
     public void Create()
@@ -134,3 +134,5 @@ public class VertexBuffer : IDisposable
         GL.DeleteBuffer(VBO);
     }
 }
+
+public record struct BufferOffset(VertexBuffer Buffer, int BaseVertex, int StartIndex);

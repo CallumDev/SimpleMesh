@@ -1,23 +1,24 @@
+using System;
+using System.Collections.Generic;
+
 namespace SimpleMesh
 {
-    public class TriangleGroup
+    public class TriangleGroup(Material material)
     {
         public int StartIndex;
         public int BaseVertex;
         public int IndexCount;
-        public Material Material;
+        public Material Material = material;
 
         internal TriangleGroup Clone(Model model)
         {
-            Material m = null;
-            if (Material != null)
-                model.Materials.TryGetValue(Material.Name, out m);
-            return new TriangleGroup()
+            if (!model.Materials.TryGetValue(Material.Name, out var material))
+                throw new KeyNotFoundException("Matching material not found");
+            return new TriangleGroup(material)
             {
                 StartIndex = StartIndex,
                 BaseVertex = BaseVertex,
                 IndexCount = IndexCount,
-                Material = m,
             };
         }
     }

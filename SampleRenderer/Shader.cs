@@ -38,15 +38,15 @@ namespace SampleRenderer
 
             GL.LinkProgram(ID);
             Console.WriteLine(GL.GetProgramInfoLog(ID));
-            GL.GetProgram(ID, ProgramParameter.LinkStatus, out status);
+            GL.GetProgram(ID, GetProgramParameterName.LinkStatus, out status);
             if (status == 0) throw new Exception("Link failed");
         }
-        
+
         private Dictionary<string, int> locs = new Dictionary<string, int>();
 
 
         private static int usedProgram = -1;
-        
+
         public int GetLocation(string s)
         {
             if (!locs.TryGetValue(s, out int l))
@@ -63,35 +63,35 @@ namespace SampleRenderer
             var x = GetLocation(loc);
             if(x != -1) GL.Uniform1(x, v);
         }
-        
+
         public void SetF(string loc, float v)
         {
             Use();
             var x = GetLocation(loc);
             if(x != -1) GL.Uniform1(x, v);
         }
-        
+
         public void Set(string loc, Vector2 v)
         {
             Use();
             var x = GetLocation(loc);
             if(x != -1) GL.Uniform2(x, v);
         }
-        
+
         public void Set(string loc, bool v)
         {
             Use();
             var x = GetLocation(loc);
             if (x != -1) GL.Uniform1(x, v ? 1 : 0);
         }
-        
+
         public void Set(string loc, float x, float y, float z)
         {
             Use();
             var l = GetLocation(loc);
             if (l != -1) GL.Uniform3(l, x, y, z);
         }
-        
+
         public void Set(string loc, float x, float y, float z, float w)
         {
             Use();
@@ -106,7 +106,7 @@ namespace SampleRenderer
             if (x == -1) return;
             GL.UniformMatrix4(x, 1, false, (float*) &mat);
         }
-        
+
         public unsafe void SetSpan(string loc, Span<System.Numerics.Matrix4x4> mats)
         {
             Use();
@@ -117,7 +117,7 @@ namespace SampleRenderer
                 GL.UniformMatrix4(x, mats.Length, false, (float*)ptr);
             }
         }
-        
+
         public unsafe void Set(string loc, Matrix4 mat)
         {
             Use();

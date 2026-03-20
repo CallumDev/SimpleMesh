@@ -19,9 +19,9 @@ class Face
     public Vector3d Normal;
     public Vector3d Centroid;
     public double Offset;
-    public Vertex Outside;
+    public Vertex? Outside;
     public Mark Mark;
-    public HalfEdge Edge;
+    public HalfEdge Edge = null!;
     public int VertexCount;
     public double Area;
 
@@ -30,17 +30,17 @@ class Face
         var it = Edge;
         while (i > 0)
         {
-            it = it.Next;
+            it = it!.Next;
             i--;
         }
 
         while (i < 0)
         {
-            it = it.Prev;
+            it = it!.Prev;
             i++;
         }
 
-        return it;
+        return it!;
     }
 
     public void ComputeNormal()
@@ -71,7 +71,7 @@ class Face
         if (Area < minArea)
         {
             // compute the normal without the longest edge
-            HalfEdge maxEdge = null;
+            HalfEdge? maxEdge = null;
             float maxSquaredLength = 0;
             var edge = Edge;
             do
@@ -85,7 +85,7 @@ class Face
                 edge = edge.Next;
             } while (edge != Edge);
 
-            var p1 = (Vector3d)maxEdge.Tail().Point;
+            var p1 = (Vector3d)maxEdge!.Tail()!.Point;
             var p2 = (Vector3d)maxEdge.Head().Point;
             var maxVector = p2 - p1;
             maxVector.Normalize();
@@ -135,10 +135,10 @@ class Face
         return Vector3d.Dot(Normal, (Vector3d)point) - Offset;
     }
 
-    public Face ConnectHalfEdges(HalfEdge prev, HalfEdge next)
+    public Face? ConnectHalfEdges(HalfEdge prev, HalfEdge next)
     {
-        Face discardedFace = null;
-        if (prev.Opposite.Face == next.Opposite.Face)
+        Face? discardedFace = null;
+        if (prev.Opposite!.Face == next.Opposite!.Face)
         {
             // `prev` is remove a redundant edge
             var oppositeFace = next.Opposite.Face;
@@ -161,7 +161,7 @@ class Face
                 //
                 // Note: the opposite edge is actually in the face to the right
                 // of the face to be destroyed
-                oppositeEdge = next.Opposite.Prev.Opposite;
+                oppositeEdge = next.Opposite!.Prev!.Opposite!;
                 oppositeFace.Mark = Mark.Deleted;
                 discardedFace = oppositeFace;
             } else {
@@ -190,8 +190,8 @@ class Face
                 //    / a |/  | /
                 //   *----*----*
                 //  /     b     \
-                oppositeEdge.Prev = oppositeEdge.Prev.Prev;
-                oppositeEdge.Prev.Next = oppositeEdge;
+                oppositeEdge.Prev = oppositeEdge.Prev!.Prev!;
+                oppositeEdge.Prev!.Next = oppositeEdge;
             }
             //       /|
             //      / |
@@ -202,7 +202,7 @@ class Face
             //           |
             //     redundant edge
             next.Prev = prev.Prev;
-            next.Prev.Next = next;
+            next.Prev!.Next = next;
 
             //       / \  \
             //      /   \->\
@@ -237,7 +237,7 @@ class Face
     public List<Face> MergeAdjacentFaces(HalfEdge adjacentEdge, List<Face> discardedFaces)
     {
         var oppositeEdge = adjacentEdge.Opposite;
-        var oppositeFace = oppositeEdge.Face;
+        var oppositeFace = oppositeEdge!.Face;
 
         discardedFaces.Add(oppositeFace);
         oppositeFace.Mark = Mark.Deleted;
@@ -250,22 +250,22 @@ class Face
         //      /     opposite face    \
         //                <===
         //
-        var adjacentEdgePrev = adjacentEdge.Prev;
-        var adjacentEdgeNext = adjacentEdge.Next;
-        var oppositeEdgePrev = oppositeEdge.Prev;
-        var oppositeEdgeNext = oppositeEdge.Next;
+        HalfEdge adjacentEdgePrev = adjacentEdge.Prev!;
+        HalfEdge adjacentEdgeNext = adjacentEdge.Next!;
+        HalfEdge oppositeEdgePrev = oppositeEdge.Prev!;
+        HalfEdge oppositeEdgeNext = oppositeEdge.Next!;
 
         // left edge
-        while (adjacentEdgePrev.Opposite.Face == oppositeFace)
+        while (adjacentEdgePrev!.Opposite!.Face == oppositeFace)
         {
-            adjacentEdgePrev = adjacentEdgePrev.Prev;
+            adjacentEdgePrev = adjacentEdgePrev.Prev!;
             oppositeEdgeNext = oppositeEdgeNext.Next;
         }
         // right edge
-        while (adjacentEdgeNext.Opposite.Face == oppositeFace)
+        while (adjacentEdgeNext.Opposite!.Face == oppositeFace)
         {
             adjacentEdgeNext = adjacentEdgeNext.Next;
-            oppositeEdgePrev = oppositeEdgePrev.Prev;
+            oppositeEdgePrev = oppositeEdgePrev.Prev!;
         }
         // adjacentEdgePrev  \         face         / adjacentEdgeNext
         //                    * ---- * ---- * ---- *

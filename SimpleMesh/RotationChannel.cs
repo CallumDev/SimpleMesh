@@ -7,8 +7,8 @@ public record struct RotationKeyframe(float Time, Quaternion Rotation);
 
 public class RotationChannel
 {
-    public RotationKeyframe[] Keyframes;
-    public string Target;
+    public RotationKeyframe[] Keyframes = [];
+    public string Target = "";
 
     public RotationChannel Clone()
     {

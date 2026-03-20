@@ -69,13 +69,20 @@ unsafe static class MikkTSpace
         private T* _1;
         private T* _2;
 
-        public ref T* this[int index]
+        public T* this[int index]
         {
             get
             {
-                if (index == 0) return ref _0;
-                if (index == 1) return ref _1;
-                if (index == 2) return ref _2;
+                if (index == 0) return _0;
+                if (index == 1) return _1;
+                if (index == 2) return _2;
+                throw new IndexOutOfRangeException();
+            }
+            set
+            {
+                if (index == 0) _0 = value;
+                if (index == 1) _1 = value;
+                if (index == 2) _2 = value;
                 throw new IndexOutOfRangeException();
             }
         }

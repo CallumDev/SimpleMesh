@@ -1,24 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Xml;
 using SimpleMesh;
 
 namespace SampleOpenTK;
 
-public class SkinInstance
-{
-    public Skin Skin;
-    public InstanceNode? Root;
-    public InstanceNode[] Bones;
-    public Matrix4x4[] Matrices;
-}
+public record SkinInstance(Skin Skin, InstanceNode? Root, InstanceNode[] Bones, Matrix4x4[] Matrices);
 
 public class ModelInstance
 {
     public AnimationHandler Animator = new();
     public InstanceNode[] Roots;
     public SkinInstance[] Skins;
-    
+
     public ModelInstance(Model model)
     {
         Dictionary<ModelNode, InstanceNode> instances = new();
@@ -31,13 +26,11 @@ public class ModelInstance
         Skins = new SkinInstance[model.Skins.Length];
         for (int i = 0; i < model.Skins.Length; i++)
         {
-            var si = new SkinInstance()
-            {
-                Skin = model.Skins[i],
-                Root = model.Skins[i].Root == null ? null : instances[model.Skins[i].Root],
-                Bones = new InstanceNode[model.Skins[i].Bones.Length],
-                Matrices = new Matrix4x4[model.Skins[i].Bones.Length]
-            };
+            var si = new SkinInstance(
+                model.Skins[i],
+                model.Skins[i].Root == null ? null : instances[model.Skins[i].Root!],
+                new InstanceNode[model.Skins[i].Bones.Length],
+                new Matrix4x4[model.Skins[i].Bones.Length]);
             for (int j = 0; j < si.Bones.Length; j++)
             {
                 si.Bones[j] = instances[model.Skins[i].Bones[j]];
@@ -96,7 +89,7 @@ public class ModelInstance
 
     InstanceNode AddNode(ModelNode node, Dictionary<ModelNode, InstanceNode> instances)
     {
-        var n = new InstanceNode() { Node = node, Transform = node.Transform };
+        var n = new InstanceNode(node);
         instances[node] = n;
         foreach(var c in node.Children)
             n.Children.Add(AddNode(c, instances));
@@ -104,10 +97,10 @@ public class ModelInstance
     }
 }
 
-public class InstanceNode
+public class InstanceNode(ModelNode node)
 {
-    public Matrix4x4 Transform;
-    public ModelNode Node;
+    public Matrix4x4 Transform = node.Transform;
+    public ModelNode Node = node;
     public SkinInstance? Skin;
     public List<InstanceNode> Children = [];
 }

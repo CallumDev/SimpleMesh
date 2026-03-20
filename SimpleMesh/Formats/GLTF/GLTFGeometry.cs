@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text.Json;
+using SimpleMesh.Util;
 
 namespace SimpleMesh.Formats.GLTF
 {
@@ -21,7 +22,7 @@ namespace SimpleMesh.Formats.GLTF
                     if (idx != geoIdx)
                         continue;
                     if (n.TryGetProperty("name", out var nameElement))
-                        referencedBy.Add(nameElement.GetString());
+                        referencedBy.Add(nameElement.GetString() ?? $"NONAME (index {k})");
                     else
                         referencedBy.Add($"NONAME (index {k})");
                     k++;
@@ -29,9 +30,9 @@ namespace SimpleMesh.Formats.GLTF
                 return $"{error}\nReferenced By: {String.Join(',', referencedBy)}";
             }
 
-            var g = new Geometry();
+            var geoName = "";
             if (element.TryGetProperty("name", out var nameProp))
-                g.Name = nameProp.GetString();
+                geoName = nameProp.GetString() ?? "";
             if (!element.TryGetProperty("primitives", out var primArray))
                 throw new ModelLoadException(GError("mesh does not contain primitives"));
             int startIndex = 0;
@@ -78,14 +79,14 @@ namespace SimpleMesh.Formats.GLTF
             }
 
             VertexArrayBuilder vertexArray = new VertexArrayBuilder(attrs);
-            
+
             int startMode = -1;
             foreach (var prim in primArray.EnumerateArray())
             {
                 if (!prim.TryGetProperty("attributes", out var attrArray))
                     throw new ModelLoadException(GError("mesh primitive does not contain attributes"));
 
-                if (!prim.TryGetProperty("mode", out var modeProp) 
+                if (!prim.TryGetProperty("mode", out var modeProp)
                     || !modeProp.TryGetInt32(out var mode))
                     mode = 4;
 
@@ -96,7 +97,7 @@ namespace SimpleMesh.Formats.GLTF
                     4 => "triangles",
                     _ => $"unknown (mode {m})"
                 };
-                
+
                 if (startMode != -1 && startMode != mode)
                 {
                     throw new ModelLoadException(
@@ -201,7 +202,7 @@ namespace SimpleMesh.Formats.GLTF
                         int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
                         indexArray.Add((uint) idx);
                     }
-                } 
+                }
                 else
                 {
                     var c = accessors[posIndex].Count;
@@ -245,35 +246,28 @@ namespace SimpleMesh.Formats.GLTF
                         indexArray.Add((uint) idx);
                     }
                 }
-                
-                tg.Add(new TriangleGroup()
+
+                tg.Add(new TriangleGroup(prim.TryGetProperty("material", out var matProp)
+                    ? materials[matProp.GetInt32()] : materials[0])
                 {
                     BaseVertex = vertexArray.BaseVertex,
                     IndexCount = indexArray.Count - startIndex,
                     StartIndex = startIndex,
-                    Material =  prim.TryGetProperty("material", out var matProp)
-                     ? materials[matProp.GetInt32()] : materials[0]
                 });
                 vertexArray.Chunk();
                 startIndex = indexArray.Count;
             }
 
-            switch (startMode)
+            var g = new Geometry(vertexArray.Finish(), Indices.FromBuffer(indexArray.ToArray()));
+            g.Kind = startMode switch
             {
-                case 4:
-                    g.Kind = GeometryKind.Triangles;
-                    break;
-                case 1:
-                    g.Kind = GeometryKind.Lines;
-                    break;
-                default:
-                    throw new Exception(GError("Unsupported primitive mode " + startMode));
-            }
-
+                4 => GeometryKind.Triangles,
+                1 => GeometryKind.Lines,
+                _ => throw new Exception(GError("Unsupported primitive mode " + startMode))
+            };
             g.Vertices = vertexArray.Finish();
-            g.Indices = Indices.FromBuffer(indexArray.ToArray());
             g.Groups = tg.ToArray();
-            
+
             return g;
         }
     }
@@ -326,7 +320,7 @@ namespace SimpleMesh.Formats.GLTF
                 throw new ModelLoadException("accessor must have count");
             }
 
-            if (!element.TryGetProperty("type", out var typeProp))
+            if (!element.TryGetStringProperty("type", out var typeProp))
             {
                 throw new ModelLoadException("accessor must have type");
             }
@@ -341,7 +335,7 @@ namespace SimpleMesh.Formats.GLTF
 
             Count = countProp.GetInt32();
             ComponentType = (ComponentType) compType.GetInt32();
-            Type = Enum.Parse<AccessorType>(typeProp.GetString(), true);
+            Type = Enum.Parse<AccessorType>(typeProp, true);
         }
 
         int GetNumComponents()
@@ -498,11 +492,11 @@ namespace SimpleMesh.Formats.GLTF
     {
         public byte[] Buffer;
 
-        public GLTFBuffer(JsonElement element, byte[] binchunk, IExternalResources external)
+        public GLTFBuffer(JsonElement element, byte[]? binchunk, IExternalResources external)
         {
             if (!element.TryGetProperty("uri", out var uriProperty))
             {
-                Buffer = binchunk;
+                Buffer = binchunk ?? throw new ModelLoadException("glTF buffer has no valid uri or GLB binary chunk");
             }
             else
             {
@@ -512,6 +506,6 @@ namespace SimpleMesh.Formats.GLTF
                 Buffer = UriTools.BytesFromUri(str, external);
             }
         }
-        
+
     }
 }

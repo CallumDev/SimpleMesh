@@ -6,12 +6,12 @@ namespace SimpleMesh
 {
     public class ModelNode
     {
-        public string Name;
+        public string Name = "";
         public Matrix4x4 Transform = Matrix4x4.Identity;
-        public Geometry Geometry;
+        public Geometry? Geometry;
         public List<ModelNode> Children = new List<ModelNode>();
         public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
-        public Skin Skin;
+        public Skin? Skin;
 
         internal ModelNode Clone(Model newModel, Model existingModel)
         {

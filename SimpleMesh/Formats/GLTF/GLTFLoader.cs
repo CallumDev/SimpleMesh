@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.Json;
+using SimpleMesh.Util;
 
 namespace SimpleMesh.Formats.GLTF
 {
@@ -14,7 +16,7 @@ namespace SimpleMesh.Formats.GLTF
             using var reader = new StreamReader(stream);
             return Load(reader.ReadToEnd(), null, ctx);
         }
-        
+
         // ReSharper disable CompareOfFloatsByEqualityOperator
 
         static bool NumberIsInteger(float f) => ((int) f) == f;
@@ -33,7 +35,7 @@ namespace SimpleMesh.Formats.GLTF
                 case JsonValueKind.False:
                     return new PropertyValue(false);
                 case JsonValueKind.String:
-                    return new PropertyValue(value.GetString());
+                    return new PropertyValue(value.GetString() ?? "");
                 case JsonValueKind.Array:
                     if (value.EnumerateArray().All(x => x.ValueKind == JsonValueKind.Number))
                     {
@@ -61,12 +63,12 @@ namespace SimpleMesh.Formats.GLTF
             return true;
         }
 
-        
-        public static Model Load(string json, byte[] binchunk, ModelLoadContext ctx)
+
+        public static Model Load(string json, byte[]? binchunk, ModelLoadContext ctx)
         {
             using var jsonObject = JsonDocument.Parse(json);
-            string copyright = null;
-            string generator = null;
+            string? copyright = null;
+            string? generator = null;
             var jsonRoot = jsonObject.RootElement;
             if (!jsonRoot.TryGetProperty("asset", out var assetElement))
                 throw new ModelLoadException("Invalid glTF 2.0 JSON (missing asset element)");
@@ -75,9 +77,9 @@ namespace SimpleMesh.Formats.GLTF
             if (versionElement.GetString() != "2.0")
                 throw new ModelLoadException("Invalid glTF 2.0 JSON (asset version != 2.0)");
             if (assetElement.TryGetProperty("copyright", out var copyrightElement))
-                copyright = copyrightElement.GetString();
+                copyright = copyrightElement.GetString() ?? "";
             if (assetElement.TryGetProperty("generator", out var generatorElement))
-                generator = generatorElement.GetString();
+                generator = generatorElement.GetString() ?? "";
 
             //Load mesh resources
             if (!jsonRoot.TryGetProperty("buffers", out var buffersElement)) {
@@ -114,23 +116,18 @@ namespace SimpleMesh.Formats.GLTF
                 k++;
             }
             //Load materials
-            ImageData[] images = null;
-            Dictionary<string, ImageData> referencedImages = null;
+            ImageData[] images = [];
+            Dictionary<string, ImageData> referencedImages = new();
             int filenameCount = 0;
             if (jsonRoot.TryGetProperty("images", out var imagesElement))
             {
                 k = 0;
                 images = new ImageData[imagesElement.GetArrayLength()];
-                referencedImages = new Dictionary<string, ImageData>();
                 foreach (var i in imagesElement.EnumerateArray())
                 {
-                    string name = null;
-                    string mimeType = null;
-                    byte[] data = null;
-                    if (i.TryGetProperty("name", out var nameElem))
-                       name = nameElem.ToString();
-                    if (i.TryGetProperty("mimeType", out var mimeTypeElem))
-                        mimeType = mimeTypeElem.ToString();
+                    i.TryGetStringProperty("name", out var name);
+                    i.TryGetStringProperty("mimeType", out var mimeType);
+                    byte[]? data = null;
                     if (i.TryGetProperty("bufferView", out var bufferViewElem))
                     {
                         var idx = bufferViewElem.GetInt32();
@@ -149,12 +146,12 @@ namespace SimpleMesh.Formats.GLTF
                     }
                     if (name == null)
                         name = $"texture{filenameCount++}";
-                    images[k] = new ImageData(name, data, mimeType);
+                    images[k] = new ImageData(name, data ?? [], mimeType ?? "application/octet-stream");
                     k++;
                 }
             }
 
-            int[] textureSources = null;
+            int[]? textureSources = null;
             if (jsonRoot.TryGetProperty("textures", out var texturesElement))
             {
                 k = 0;
@@ -167,7 +164,7 @@ namespace SimpleMesh.Formats.GLTF
                 }
             }
 
-            TextureInfo GetTexture(JsonElement element, string propertyName)
+            TextureInfo? GetTexture(JsonElement element, string propertyName)
             {
                 if (element.TryGetProperty(propertyName, out var prop)
                     && textureSources != null
@@ -189,7 +186,7 @@ namespace SimpleMesh.Formats.GLTF
                 }
                 return null;
             }
-            
+
             Material[] materials;
             if (jsonRoot.TryGetProperty("materials", out var materialsElement))
             {
@@ -197,9 +194,9 @@ namespace SimpleMesh.Formats.GLTF
                 k = 0;
                 foreach (var m in materialsElement.EnumerateArray())
                 {
-                    if (!m.TryGetProperty("name", out var matname))
+                    if (!m.TryGetStringProperty("name", out var matname))
                         throw new ModelLoadException("material missing name property");
-                    var mat = new Material {Name = matname.GetString()};
+                    var mat = new Material {Name = matname};
                     mat.DiffuseColor = LinearColor.White; // Default colour
                     if (m.TryGetProperty("emissiveFactor", out var emissiveCol))
                     {
@@ -259,7 +256,7 @@ namespace SimpleMesh.Formats.GLTF
             if (!jsonRoot.TryGetProperty("nodes", out var nodesElement)) {
                 throw new ModelLoadException("glTF file contains no objects");
             }
-            
+
             //Meshes
             var meshes = new Geometry[meshesElement.GetArrayLength()];
             k = 0;
@@ -268,16 +265,16 @@ namespace SimpleMesh.Formats.GLTF
                 meshes[k] = GLTFGeometry.FromMesh(m, nodesElement, k, materials, accessors);
                 k++;
             }
-            
-            
+
+
 
             var nodes = new GLTFNode[nodesElement.GetArrayLength()];
             k = 0;
             foreach (var n in nodesElement.EnumerateArray())
             {
                 nodes[k] = new GLTFNode();
-                if (n.TryGetProperty("name", out var nameElement))
-                    nodes[k].Name = nameElement.GetString();
+                if (n.TryGetStringProperty("name", out var name))
+                    nodes[k].Name = name;
                 if (n.TryGetProperty("mesh", out var meshElement))
                     nodes[k].Geometry = meshes[meshElement.GetInt32()];
                 if (n.TryGetProperty("skin", out var skinElem))
@@ -341,17 +338,20 @@ namespace SimpleMesh.Formats.GLTF
                 allSkins = new Skin[skinarray.Length];
                 foreach (var obj in skinsElement.EnumerateArray())
                 {
-                    var s = new GLTFSkin() { Name = $"skin{k}" };
-                    if (obj.TryGetProperty("name", out var nameElement))
-                        s.Name = nameElement.GetString() ?? $"skin{k}";
-                    if(obj.TryGetProperty("skeleton", out var skeletonElement))
-                        s.Skeleton = skeletonElement.GetInt32();
+                    if (!obj.TryGetStringProperty("name", out var name))
+                        name = $"skin{k}";
+                    var joints = new List<int>();
                     if (obj.TryGetProperty("joints", out var jointsElement))
                     {
                         foreach(var j in jointsElement.EnumerateArray())
-                            s.Joints.Add(j.GetInt32());
+                            joints.Add(j.GetInt32());
                     }
-                    s.InverseBindMatrices = new Matrix4x4[s.Joints.Count];
+                    var inverseBindMatrices = new Matrix4x4[joints.Count];
+                    var s = new GLTFSkin(name, inverseBindMatrices, joints);
+
+                    if(obj.TryGetProperty("skeleton", out var skeletonElement))
+                        s.Skeleton = skeletonElement.GetInt32();
+
                     if (obj.TryGetProperty("inverseBindMatrices", out var inv))
                     {
                         var accessor = accessors[inv.GetInt32()];
@@ -366,21 +366,22 @@ namespace SimpleMesh.Formats.GLTF
                     skinarray[k++] = s;
                 }
             }
-            
-            Animation[] animarray = null;
+
+            Animation[] animarray = [];
             if (jsonRoot.TryGetProperty("animations", out var animationsElement))
             {
                 var anims = new List<Animation>();
                 var names = nodes.Select(x => x.Name).ToArray();
+                int i = 0;
                 foreach (var obj in animationsElement.EnumerateArray())
                 {
-                    anims.Add(GLTFAnimation.FromGLTF(obj, accessors, names));
+                    anims.Add(GLTFAnimation.FromGLTF(obj, accessors, names, i++));
                 }
                 animarray = anims.ToArray();
             }
 
             ModelNode[] concreteNodes = new ModelNode[nodes.Length];
-            
+
             List<Geometry> refGeometry = new List<Geometry>();
             List<Material> refMaterial = new List<Material>();
             var model = new Model() { Copyright = copyright, Generator = generator };
@@ -394,16 +395,17 @@ namespace SimpleMesh.Formats.GLTF
             {
                 if (allSkins[i] == null)
                     continue;
+                var sk = allSkins[i]!;
                 if (skinarray[i].Skeleton != null)
-                    allSkins[i].Root = concreteNodes[skinarray[i].Skeleton.Value];
-                allSkins[i].Bones = new ModelNode[allSkins[i].InverseBindMatrices.Length];
-                for (int j = 0; j < allSkins[i].Bones.Length; j++)
+                    sk.Root = concreteNodes[skinarray[i].Skeleton!.Value];
+                sk.Bones = new ModelNode[sk.InverseBindMatrices.Length];
+                for (int j = 0; j < sk.Bones.Length; j++)
                 {
-                    allSkins[i].Bones[j] = concreteNodes[skinarray[i].Joints[j]];
+                    sk.Bones[j] = concreteNodes[skinarray[i].Joints[j]];
                 }
             }
             model.Geometries = refGeometry.ToArray();
-            model.Skins = allSkins.Where(x => x != null).ToArray();
+            model.Skins = allSkins.Where(x => x != null).ToArray()!;
             model.Materials = new Dictionary<string, Material>();
             foreach (var mat in refMaterial)
                 model.Materials[mat.Name] = mat;
@@ -414,7 +416,7 @@ namespace SimpleMesh.Formats.GLTF
         }
 
         static ModelNode GetNode(GLTFNode[] nodes, int index, List<Geometry> refGeometry, List<Material> refMaterial,
-            ModelNode[] concreteNodes, GLTFSkin[] skinSource, Skin[] skinArray)
+            ModelNode[] concreteNodes, GLTFSkin[] skinSource, Skin?[] skinArray)
         {
             var m = new ModelNode();
             concreteNodes[index] = m;
@@ -422,7 +424,7 @@ namespace SimpleMesh.Formats.GLTF
             m.Geometry = nodes[index].Geometry;
             if (nodes[index].Skin != null)
             {
-                var s = nodes[index].Skin.Value;
+                var s = nodes[index].Skin!.Value;
                 skinArray[s] ??= new Skin()
                     { Name = skinSource[s].Name, InverseBindMatrices = skinSource[s].InverseBindMatrices };
                 m.Skin = skinArray[s];
@@ -449,28 +451,28 @@ namespace SimpleMesh.Formats.GLTF
             public List<int> Nodes = new List<int>();
         }
 
-        class GLTFSkin
+        class GLTFSkin(string name, Matrix4x4[] inverseBindMatrices, List<int> joints)
         {
-            public string Name;
-            public Matrix4x4[] InverseBindMatrices;
+            public string Name = name;
+            public Matrix4x4[] InverseBindMatrices = inverseBindMatrices;
             public int? Skeleton;
-            public List<int> Joints = [];
+            public List<int> Joints = joints;
         }
-        
-        class GLTFNode
+
+        class GLTFNode()
         {
-            public string Name;
-            public Matrix4x4 Transform;
-            public Geometry Geometry;
+            public string Name = "";
+            public Matrix4x4 Transform = Matrix4x4.Identity;
+            public Geometry? Geometry;
             public int? Skin;
             public List<int> Children = new List<int>();
             public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
         }
-        
-        
+
+
         static bool TryGetVector3(JsonElement element, out Vector3 v)
         {
-            if (!GetFloatArray(element, 3, out float[] floats))
+            if (!GetFloatArray(element, 3, out var floats))
             {
                 v = Vector3.Zero;
                 return false;
@@ -478,10 +480,10 @@ namespace SimpleMesh.Formats.GLTF
             v = new Vector3(floats[0], floats[1], floats[2]);
             return true;
         }
-        
+
         static bool TryGetQuaternion(JsonElement element, out Quaternion q)
         {
-            if (!GetFloatArray(element, 4, out float[] floats))
+            if (!GetFloatArray(element, 4, out var floats))
             {
                 q = Quaternion.Identity;
                 return false;
@@ -490,7 +492,7 @@ namespace SimpleMesh.Formats.GLTF
             return true;
         }
 
-        static bool GetFloatArray(JsonElement element, int expected, out float[] floats)
+        static bool GetFloatArray(JsonElement element, int expected, [NotNullWhen(true)]out float[]? floats)
         {
             if (element.GetArrayLength() != expected)
             {

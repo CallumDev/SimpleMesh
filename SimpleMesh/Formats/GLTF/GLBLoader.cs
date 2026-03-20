@@ -24,7 +24,7 @@ namespace SimpleMesh.Formats.GLTF
             if(jsonMagic != CHUNK_JSON) throw new ModelLoadException("Not a valid glb binary (json chunk)");
 
             var jsonText = Encoding.UTF8.GetString(reader.ReadBytes((int)jsonLength));
-            byte[] binChunk = null;
+            byte[]? binChunk = null;
             if (totalLength > 5 * sizeof(uint) + jsonLength)
             {
                 uint binLength = reader.ReadUInt32();

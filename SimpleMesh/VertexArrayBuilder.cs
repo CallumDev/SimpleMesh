@@ -81,7 +81,7 @@ namespace SimpleMesh
             VertexArray Finish();
             int BaseVertex { get; }
         }
-        abstract class BuilderImpl<T> : IBuilderImpl
+        abstract class BuilderImpl<T> : IBuilderImpl where T : notnull
         {
             Dictionary<T, int> indices = new Dictionary<T, int>();
             private VertexArray array;

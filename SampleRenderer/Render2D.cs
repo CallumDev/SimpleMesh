@@ -54,7 +54,7 @@ void main()
         public unsafe Render2D()
         {
             //load texture
-            using var stream = typeof(Render2D).Assembly.GetManifestResourceStream("SampleRenderer.LiberationSans_0.png");
+            using var stream = typeof(Render2D).Assembly.GetManifestResourceStream("SampleRenderer.LiberationSans_0.png")!;
             texture = Texture.Load(stream);
             shader = new Shader(VERTEX, FRAGMENT);
             shader.SetI("texture", 0);
@@ -68,7 +68,7 @@ void main()
             GL.EnableVertexAttribArray(4);
             GL.VertexAttribPointer(4, 2,  VertexAttribPointerType.Float, false, 4 * sizeof(float), 2 * sizeof(float));
         }
-        
+
         public void Start(int width, int height)
         {
             GL.Disable(EnableCap.CullFace);
@@ -100,8 +100,7 @@ void main()
                 }
                 else
                 {
-                    LiberationSans.Glyph glyph;
-                    if (!LiberationSans.Glyphs.TryGetValue(text[i], out glyph))
+                    if (!LiberationSans.Glyphs.TryGetValue(text[i], out var glyph))
                         glyph = LiberationSans.Glyphs['?'];
                     dX += glyph.XAdvance;
                 }
@@ -120,7 +119,7 @@ void main()
                 } else if (text[i] == '\t')
                 {
                     dX += LiberationSans.Glyphs[' '].XAdvance * 4;
-                } 
+                }
                 else if (text[i] == '\n')
                 {
                     dX = (int) x;
@@ -128,8 +127,7 @@ void main()
                 }
                 else
                 {
-                    LiberationSans.Glyph glyph;
-                    if (!LiberationSans.Glyphs.TryGetValue(text[i], out glyph))
+                    if (!LiberationSans.Glyphs.TryGetValue(text[i], out var glyph))
                         glyph = LiberationSans.Glyphs['?'];
                     AddQuad(glyph.Source, dX + glyph.XOffset, dY + glyph.YOffset);
                     dX += glyph.XAdvance;
@@ -198,6 +196,6 @@ void main()
             GL.DrawArrays(PrimitiveType.Triangles, 0, vCount);
             vCount = 0;
         }
-        
+
     }
 }

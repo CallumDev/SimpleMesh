@@ -24,14 +24,14 @@ namespace SimpleMesh.Formats.Obj
             var geometries = new List<Geometry>();
             ModelNode rootNode = new ModelNode();
             model.Roots = new ModelNode[] {rootNode};
-            
+
             rootNode.Name = "default";
             ModelNode currentNode = rootNode;
             VertexArrayBuilder currentVertex = new VertexArrayBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
             List<uint> currentIndices = new List<uint>();
             List<TriangleGroup> currentGroups = new List<TriangleGroup>();
             VertexAttributes attributes = VertexAttributes.Position;
-            string currentMaterial = null;
+            string? currentMaterial = null;
             bool warnedNonPolygonal = false;
             int lastIndex = 0;
 
@@ -44,9 +44,9 @@ namespace SimpleMesh.Formats.Obj
                     dest.DiffuseTexture = new(src.DiffuseMap, 0);
             }
 
-            Material GetMaterial(string name) 
+            Material GetMaterial(string name)
             {
-                if (!model.Materials.TryGetValue(name, out Material x))
+                if (!model.Materials.TryGetValue(name, out var x))
                 {
                     x = new Material() {DiffuseColor = LinearColor.White, Name = name};
                     if (srcMaterials.TryGetValue(name, out var srcMat))
@@ -56,8 +56,8 @@ namespace SimpleMesh.Formats.Obj
                 return x;
             }
 
-            string src_line;
-            
+            string? src_line;
+
             Span<float> pos = stackalloc float[3];
             Span<float> norm = stackalloc float[3];
             Span<float> tex = stackalloc float[2];
@@ -72,18 +72,26 @@ namespace SimpleMesh.Formats.Obj
             {
                 if (lastIndex != currentIndices.Count)
                 {
-                    var tg = new TriangleGroup() {
+                    var tg = new TriangleGroup(GetMaterial(currentMaterial ?? "default")) {
                         BaseVertex = currentVertex.BaseVertex,
                         IndexCount = (currentIndices.Count - lastIndex),
-                        StartIndex = lastIndex,
-                        Material = GetMaterial(currentMaterial ?? "default")
+                        StartIndex = lastIndex
                     };
                     currentGroups.Add(tg);
                     lastIndex = currentIndices.Count;
                     currentVertex.Chunk();
                 }
             }
-            
+
+            void SetNodeGeometry()
+            {
+                currentNode.Geometry = new Geometry(currentVertex.Finish(), Indices.FromBuffer(currentIndices.ToArray()));
+                currentNode.Geometry.Vertices.ChangeAttributes(attributes);
+                currentNode.Geometry.Groups = currentGroups.ToArray();
+                currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
+                geometries.Add(currentNode.Geometry);
+            }
+
             while ((src_line = reader.ReadLine()) != null)
             {
                 var ln = src_line.AsSpan().Trim();
@@ -236,7 +244,7 @@ namespace SimpleMesh.Formats.Obj
                 }
                 else if (IsParam(ln, 'o') && GetParam(ln, out var objname))
                 {
-                    if (currentIndices.Count == 0 && (currentNode == rootNode)) 
+                    if (currentIndices.Count == 0 && (currentNode == rootNode))
                     {
                         rootNode.Name = objname.ToString();
                     }
@@ -246,22 +254,16 @@ namespace SimpleMesh.Formats.Obj
                         {
                             if (lastIndex != currentIndices.Count)
                             {
-                                var tg = new TriangleGroup()
+                                var tg = new TriangleGroup(GetMaterial(currentMaterial ?? "default"))
                                 {
                                     BaseVertex = currentVertex.BaseVertex,
                                     IndexCount = (currentIndices.Count - lastIndex),
                                     StartIndex = lastIndex,
-                                    Material = GetMaterial(currentMaterial ?? "default")
                                 };
                                 currentGroups.Add(tg);
                             }
 
-                            currentNode.Geometry = new Geometry();
-                            currentNode.Geometry.Vertices = currentVertex.Finish();
-                            currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
-                            currentNode.Geometry.Groups = currentGroups.ToArray();
-                            currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
-                            geometries.Add(currentNode.Geometry);
+                            SetNodeGeometry();
                         }
                         if (currentNode == rootNode)
                         {
@@ -291,7 +293,7 @@ namespace SimpleMesh.Formats.Obj
                 }
                 else if (StartsWithOrdinal(ln, "mtllib") && GetParam(ln, out param))
                 {
-                    Stream mtlstream;
+                    Stream? mtlstream;
                     if (ctx.ExternalResources.CanLoadResources &&
                         (mtlstream = ctx.ExternalResources.OpenStream(param.ToString())) != null)
                     {
@@ -311,18 +313,12 @@ namespace SimpleMesh.Formats.Obj
             }
 
             AppendTriangleGroup();
-            
+
             if (currentIndices.Count > 0)
             {
-                currentNode.Geometry = new Geometry();
-                currentNode.Geometry.Vertices = currentVertex.Finish();
-                currentNode.Geometry.Vertices.ChangeAttributes(attributes);
-                currentNode.Geometry.Indices = Indices.FromBuffer(currentIndices.ToArray());
-                currentNode.Geometry.Groups = currentGroups.ToArray();
-                currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
-                geometries.Add(currentNode.Geometry);
+                SetNodeGeometry();
             }
-            
+
             if(currentNode != rootNode)
                 rootNode.Children.Add(currentNode);
             model.Geometries = geometries.ToArray();
@@ -347,10 +343,8 @@ namespace SimpleMesh.Formats.Obj
                         ms.ToArray(),
                         GuessMime(m.DiffuseTexture.Name));
                 }
-                if (model.Images.Count == 0)
-                    model.Images = null;
             }
-           
+
             return model;
         }
 
@@ -363,13 +357,13 @@ namespace SimpleMesh.Formats.Obj
                 return "image/jpeg";
             return "application/octet-stream";
         }
-        
+
         static bool ResolveVertex(ref ObjVertex vtx, int lnV, int lnVN, int lnVT)
         {
             static bool ResolveIdx(int ln, ref int idx)
             {
                 if (idx == 0) {
-                    idx = -1; 
+                    idx = -1;
                     return true;
                 }
                 if (idx > 0) {
@@ -395,7 +389,7 @@ namespace SimpleMesh.Formats.Obj
             var index = x.IndexOf(c);
             return index == -1 ? x.Length : index;
         }
-        
+
         static ObjVertex ParseVertex(ReadOnlySpan<char> x, int ln)
         {
             ObjVertex vtx = new ObjVertex();
@@ -454,14 +448,14 @@ namespace SimpleMesh.Formats.Obj
         class ObjMaterial
         {
             public LinearColor Diffuse = LinearColor.White;
-            public string DiffuseMap = null;
+            public string? DiffuseMap = null;
         }
 
         static Dictionary<string, ObjMaterial> ReadMtlLib(Stream stream)
         {
             using var reader = new StreamReader(stream, null!, true, STREAMREADER_BUFFER_SIZE);
-            string src_line;
-            ObjMaterial current = null;
+            string? src_line;
+            ObjMaterial? current = null;
             var materials = new Dictionary<string, ObjMaterial>();
             Span<float> d = stackalloc float[3];
             while ((src_line = reader.ReadLine()) != null)

@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Versioning;
 
 namespace SimpleMesh.Passes
 {
     static class MergeTriangleGroups
     {
-        public static void Apply(Predicate<Material> canMerge, Geometry g)
+        public static void Apply(Predicate<Material>? canMerge, Geometry g)
         {
             //check if necessary
             HashSet<string> matNames = new HashSet<string>();
@@ -29,7 +30,7 @@ namespace SimpleMesh.Passes
                 var m = byMaterial.FirstOrDefault(x => x.Material == tg.Material);
                 if (m == null)
                 {
-                    m = new TriangleGroupList() { Material = tg.Material };
+                    m = new TriangleGroupList(tg.Material);
                     byMaterial.Add(m);
                 }
                 m.Groups.Add(tg);
@@ -41,20 +42,17 @@ namespace SimpleMesh.Passes
             //Copy verbatim
             void CopyGroup(TriangleGroup src)
             {
-                newGroups.Add(new TriangleGroup()
+                newGroups.Add(new TriangleGroup(src.Material)
                 {
                     BaseVertex = src.BaseVertex, StartIndex = newIndices.Count,
                     IndexCount = src.IndexCount, Material = src.Material
                 });
                 for (int i = 0; i < src.IndexCount; i++)
                 {
-                    if(g.Indices.Indices32 != null)
-                        newIndices.Add(g.Indices.Indices32[src.StartIndex + i]);
-                    else
-                        newIndices.Add(g.Indices.Indices16[src.StartIndex + i]);    
+                    newIndices.Add(g.Indices[src.StartIndex + i]);
                 }
             }
-            
+
             foreach (var m in byMaterial)
             {
                 //copy those that don't have merge applied
@@ -76,9 +74,7 @@ namespace SimpleMesh.Passes
                     indexCount += tg.IndexCount;
                     for (int i = 0; i < tg.IndexCount; i++)
                     {
-                        var sample = g.Indices.Indices16 != null
-                            ? (uint) g.Indices.Indices16[tg.StartIndex + i]
-                            : g.Indices.Indices32[tg.StartIndex + i];
+                        var sample = g.Indices[tg.StartIndex + i];
                         var newIndex = (sample + tg.BaseVertex) - baseVertex;
                         if (newIndex > maxVal)
                         {
@@ -98,24 +94,22 @@ namespace SimpleMesh.Passes
                     foreach (var tg in m.Groups) {
                         for (int i = 0; i < tg.IndexCount; i++)
                         {
-                            var sample = g.Indices.Indices16 != null
-                                ? (uint) g.Indices.Indices16[tg.StartIndex + i]
-                                : g.Indices.Indices32[tg.StartIndex + i];
+                            var sample = g.Indices[tg.StartIndex + i];
                             var newIndex = (sample + tg.BaseVertex) - baseVertex;
                             newIndices.Add((uint)newIndex);
                         }
                     }
-                    newGroups.Add(new TriangleGroup() { BaseVertex = baseVertex, IndexCount = indexCount, Material = m.Material, StartIndex = startIndex });
+                    newGroups.Add(new TriangleGroup(m.Material) { BaseVertex = baseVertex, IndexCount = indexCount, StartIndex = startIndex });
                 }
             }
-            
+
             g.Indices = Indices.FromBuffer(newIndices.ToArray());
             g.Groups = newGroups.ToArray();
         }
-        
-        class TriangleGroupList
+
+        class TriangleGroupList(Material material)
         {
-            public Material Material;
+            public Material Material = material;
             public List<TriangleGroup> Groups = new List<TriangleGroup>();
         }
     }

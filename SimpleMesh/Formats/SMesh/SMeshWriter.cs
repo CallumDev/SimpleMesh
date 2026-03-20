@@ -21,7 +21,7 @@ namespace SimpleMesh.Formats.SMesh
                 streamWriter = new BinaryWriter(stream);
             }
 
-            public void AddString(string str)
+            public void AddString(string? str)
             {
                 if (string.IsNullOrEmpty(str))
                     return;
@@ -33,7 +33,7 @@ namespace SimpleMesh.Formats.SMesh
                 }
             }
 
-            public void WriteStringPos(BinaryWriter writer, string str)
+            public void WriteStringPos(BinaryWriter writer, string? str)
             {
                 if (str == null)
                 {
@@ -241,7 +241,7 @@ namespace SimpleMesh.Formats.SMesh
             ms.CopyTo(comp);
         }
 
-        static void WriteTexInfo(BinaryWriter writer, StringBufferBuilder strBuffer, TextureInfo tex)
+        static void WriteTexInfo(BinaryWriter writer, StringBufferBuilder strBuffer, TextureInfo? tex)
         {
             if (tex?.Name == null)
             {
@@ -361,7 +361,7 @@ namespace SimpleMesh.Formats.SMesh
                 writer.WriteVarUInt32((uint)tg.BaseVertex);
                 writer.WriteVarUInt32((uint)tg.StartIndex);
                 writer.WriteVarUInt32((uint)tg.IndexCount);
-                strBuffer.WriteStringPos(writer, tg.Material.Name);
+                strBuffer.WriteStringPos(writer, tg.Material?.Name);
             }
             writer.WriteVarUInt32((uint)g.Vertices.Count);
             int channels = 3;
@@ -454,7 +454,7 @@ namespace SimpleMesh.Formats.SMesh
             }
             else {
                 writer.Write((byte)1);
-                IndexCoding.Encode32(g.Indices.Indices32, writer);
+                IndexCoding.Encode32(g.Indices.Indices32!, writer);
             }
         }
     }

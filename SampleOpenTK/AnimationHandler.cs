@@ -4,10 +4,10 @@ using SimpleMesh;
 
 namespace SampleOpenTK;
 
-public class AnimationInstance
+public class AnimationInstance(Animation animation)
 {
     public float Time;
-    public Animation Animation;
+    public Animation Animation = animation;
 }
 
 public class AnimationHandler
@@ -19,7 +19,7 @@ public class AnimationHandler
         for (int i = 0; i < Instances.Count; i++)
             Instances[i].Time += dt;
     }
-    
+
     public (bool Translation, bool Rotation) GetAnimated(string node, out Vector3 translated, out Quaternion rotated)
     {
         Vector3? tr = null;

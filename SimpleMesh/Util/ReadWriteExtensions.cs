@@ -20,7 +20,7 @@ namespace SimpleMesh.Util
             }
         }
 
-        public static string ReadStringUTF8(this BinaryReader reader)
+        public static string? ReadStringUTF8(this BinaryReader reader)
         {
             var len = (int)reader.ReadVarUInt32();
             if (len == 0) return null;

@@ -21,9 +21,8 @@ public interface ITangentGeometry
 
 public static class TangentGeneration
 {
-    class MikkInterfaceImpl : SMikkTSpaceInterface
+    class MikkInterfaceImpl(ITangentGeometry G) : SMikkTSpaceInterface
     {
-        public ITangentGeometry G;
         public int GetNumFaces() => G.GetNumFaces();
 
         public int GetNumVerticesOfFace(int iFace) => G.GetNumVerticesOfFace(iFace);
@@ -61,7 +60,7 @@ public static class TangentGeneration
     public static void GenerateMikkTSpace(ITangentGeometry geometry)
     {
         var context = new SMikkTSpaceContext();
-        context.Interface = new MikkInterfaceImpl() { G = geometry };
+        context.Interface = new MikkInterfaceImpl(geometry);
         MikkTSpace.genTangSpaceDefault(context);
     }
 }

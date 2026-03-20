@@ -6,7 +6,7 @@ class Vertex(Vector3 point, int index)
 {
     public Vector3 Point = point;
     public int Index = index;
-    public Vertex Next = null;
-    public Vertex Prev = null;
-    public Face Face = null;
+    public Vertex? Next = null;
+    public Vertex? Prev = null;
+    public Face? Face = null;
 }

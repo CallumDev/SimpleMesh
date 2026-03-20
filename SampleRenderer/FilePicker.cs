@@ -14,16 +14,18 @@ namespace SampleRenderer
                 Arguments = $" -c \"command -v {command} >/dev/null 2>&1\""
             };
             var p = Process.Start(startInfo);
-            p.WaitForExit();
-            return p.ExitCode == 0;
+            p?.WaitForExit();
+            return p?.ExitCode == 0;
         }
-        
-        static string RunProcess(string command, string s)
+
+        static string? RunProcess(string command, string s)
         {
             var pinf = new ProcessStartInfo(command, s);
             pinf.RedirectStandardOutput = true;
             pinf.UseShellExecute = false;
             var p = Process.Start(pinf);
+            if (p == null)
+                throw new Exception($"Unable to launch {command}");
             string output = "";
             p.OutputDataReceived += (sender, e) => {
                 output += e.Data + "\n";
@@ -35,13 +37,13 @@ namespace SampleRenderer
             else
                 return null;
         }
-        
+
         [DllImport("Comdlg32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool GetOpenFileName(ref OpenFileName ofn);
-        
+
         [DllImport("Comdlg32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool GetSaveFileName(ref OpenFileName ofn);
-        
+
         [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)]
         struct OpenFileName
         {
@@ -70,7 +72,7 @@ namespace SampleRenderer
             public int flagsEx;
         }
 
-        public static string OpenFile()
+        public static string? OpenFile()
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
@@ -98,7 +100,7 @@ namespace SampleRenderer
             }
         }
 
-        public static string SaveFile()
+        public static string? SaveFile()
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {

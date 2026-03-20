@@ -2,8 +2,8 @@ namespace SimpleMesh.Convex.Quickhull;
 
 class VertexList
 {
-    private Vertex head;
-    private Vertex tail;
+    private Vertex? head;
+    private Vertex? tail;
 
     public void Clear() => head = tail = null;
 
@@ -46,7 +46,7 @@ class VertexList
         }
         else
         {
-            tail.Next = node;
+            tail!.Next = node;
         }
         node.Prev = tail;
         node.Next = null;
@@ -61,7 +61,7 @@ class VertexList
         }
         else
         {
-            tail.Next = node;
+            tail!.Next = node;
         }
         node.Prev = tail;
         while (node.Next != null) {
@@ -112,7 +112,7 @@ class VertexList
         }
     }
 
-    public Vertex First  => head;
+    public Vertex? First => head;
 
     public bool IsEmpty => head == null;
 

@@ -33,7 +33,7 @@ class QuickhullCS
             Vertices.Add(new Vertex(points[i], i));
         }
     }
-    
+
     public static bool Verify(Vector3[] vertices, int[] indices)
     {
         if (indices.Length < 6)
@@ -116,7 +116,7 @@ class QuickhullCS
    *
    * @param {Face} face
    */
-    public Vertex RemoveAllVerticesFromFace(Face face)
+    public Vertex? RemoveAllVerticesFromFace(Face face)
     {
         if (face.Outside != null)
         {
@@ -158,7 +158,7 @@ class QuickhullCS
    * @param {Face} face
    * @param {Face} [absorbingFace]
    */
-    public void DeleteFaceVertices(Face face, Face absorbingFace = null)
+    public void DeleteFaceVertices(Face face, Face? absorbingFace = null)
     {
         var faceVertices = this.RemoveAllVerticesFromFace(face);
         if (faceVertices != null)
@@ -176,7 +176,7 @@ class QuickhullCS
                 // the reference `vertex.next` might be destroyed on
                 // `this.addVertexToFace` (see VertexList#add), nextVertex is a
                 // reference to it
-                Vertex nextVertex = null;
+                Vertex? nextVertex = null;
                 for (var vertex = faceVertices; vertex != null; vertex = nextVertex)
                 {
                     nextVertex = vertex.Next;
@@ -210,7 +210,7 @@ class QuickhullCS
         {
             vertexNext = vertex.Next;
             var maxDistance = this.Tolerance;
-            Face maxFace = null;
+            Face? maxFace = null;
             int i = 0;
             for (i = 0; i < newFaces.Count; i += 1)
             {
@@ -303,8 +303,8 @@ class QuickhullCS
         // (max.y - min.y)
         // (max.z - min.z)
 
-        Vertex v0 = null;
-        Vertex v1 = null;
+        Vertex v0 = null!;
+        Vertex v1 = null!;
         var maxDistance = 0f;
         {
             var distance = maxVertexX.Point.X - minVertexX.Point.X;
@@ -333,7 +333,7 @@ class QuickhullCS
             }
         }
 
-        Vertex v2 = null;
+        Vertex v2 = null!;
         // the next vertex is the one farthest to the line formed by `v0` and `v1`
         maxDistance = 0;
         for (int i = 0; i < Vertices.Count; i++)
@@ -350,7 +350,7 @@ class QuickhullCS
             }
         }
 
-        Vertex v3 = null;
+        Vertex v3 = null!;
         // the next vertes is the one farthest to the plane `v0`, `v1`, `v2`
         // normalize((v2 - v1) x (v0 - v1))
         var normal = PlaneNormal(v0.Point, v1.Point, v2.Point);
@@ -385,7 +385,7 @@ class QuickhullCS
    * @param {HalfEdge[]} horizon - The edges that form part of the horizon in
    * ccw order
    */
-    public void ComputeHorizon(Vector3 eyePoint, HalfEdge crossEdge, Face face, List<HalfEdge> horizon)
+    public void ComputeHorizon(Vector3 eyePoint, HalfEdge? crossEdge, Face face, List<HalfEdge> horizon)
     {
         //debug("computeHorizon call");
         // moves face's vertices to the `unclaimed` vertex list
@@ -418,7 +418,7 @@ class QuickhullCS
         do
         {
             var oppositeEdge = edge.Opposite;
-            var oppositeFace = oppositeEdge.Face;
+            var oppositeFace = oppositeEdge!.Face;
             if (oppositeFace.Mark == Mark.Visible)
             {
                 //debug($"{oppositeFace.DistanceToPlane(eyePoint)}, {Tolerance}, {oppositeFace.Normal}, {oppositeFace.Offset}, {eyePoint}");
@@ -477,11 +477,11 @@ class QuickhullCS
         //          horizon.tail --- horizon.head
         //                        2
         //
-        var face = Face.CreateTriangle(eyeVertex, horizonEdge.Tail(), horizonEdge.Head());
+        var face = Face.CreateTriangle(eyeVertex, horizonEdge.Tail()!, horizonEdge.Head());
         this.Faces.Add(face);
         // join face.getEdge(-1) with the horizon's opposite edge
         // face.getEdge(-1) = face.getEdge(2)
-        face.GetEdge(-1).SetOpposite(horizonEdge.Opposite);
+        face.GetEdge(-1).SetOpposite(horizonEdge.Opposite!);
         return face.GetEdge(0);
     }
 
@@ -495,7 +495,7 @@ class QuickhullCS
     public void AddNewFaces(Vertex eyeVertex, List<HalfEdge> horizon)
     {
         NewFaces = new List<Face>();
-        HalfEdge firstSideEdge = null, previousSideEdge = null;
+        HalfEdge? firstSideEdge = null, previousSideEdge = null;
         for (int i = 0; i < horizon.Count; i++)
         {
             var horizonEdge = horizon[i];
@@ -508,14 +508,14 @@ class QuickhullCS
             else
             {
                 // joins face.getEdge(1) with previousFace.getEdge(0)
-                sideEdge.Next.SetOpposite(previousSideEdge);
+                sideEdge.Next.SetOpposite(previousSideEdge!);
             }
 
             NewFaces.Add(sideEdge.Face);
             previousSideEdge = sideEdge;
         }
 
-        firstSideEdge.Next.SetOpposite(previousSideEdge);
+        firstSideEdge!.Next.SetOpposite(previousSideEdge!);
     }
 
     /**
@@ -530,7 +530,7 @@ class QuickhullCS
         //   face i.e. when the faces are concave
         // - A negative number when the centroid of the opposite face is below the
         //   face i.e. when the faces are convex
-        return edge.Face.DistanceToPlane(edge.Opposite.Face.Centroid);
+        return edge.Face.DistanceToPlane(edge.Opposite!.Face.Centroid);
     }
 
     /**
@@ -580,7 +580,7 @@ class QuickhullCS
                 throw new Exception("merge recursion limit exceeded");
             }
 
-            var oppositeFace = edge.Opposite.Face;
+            var oppositeFace = edge.Opposite!.Face;
             var merge = false;
 
             // Important notes about the algorithm to merge faces
@@ -685,12 +685,11 @@ class QuickhullCS
         Unclaimed.Clear();
         // remove `eyeVertex` from `eyeVertex.face` so that it can't be added to the
         // `unclaimed` vertex list
-        RemoveVertexFromFace(eyeVertex, eyeVertex.Face);
-        ComputeHorizon(eyeVertex.Point, null, eyeVertex.Face, horizon);
-        if (IsDebug)
-        {
-            debug($"horizon {string.Join(',', horizon.Select(x => x.Head().Index.ToString()))}");
-        }
+        RemoveVertexFromFace(eyeVertex, eyeVertex.Face!);
+        ComputeHorizon(eyeVertex.Point, null, eyeVertex.Face!, horizon);
+
+        debug($"horizon {string.Join(',', horizon.Select(x => x.Head().Index.ToString()))}");
+
         AddNewFaces(eyeVertex, horizon);
         debug("first merge");
         // first merge pass
@@ -801,7 +800,7 @@ class QuickhullCS
             if (vertex != v0 && vertex != v1 && vertex != v2 && vertex != v3)
             {
                 var maxDistance = this.Tolerance;
-                Face maxFace = null;
+                Face? maxFace = null;
                 for (int j = 0; j < 4; j += 1)
                 {
                     var distance = faces[j].DistanceToPlane(vertex.Point);
@@ -820,13 +819,13 @@ class QuickhullCS
         }
     }
 
-    public Vertex NextVertexToAdd()
+    public Vertex? NextVertexToAdd()
     {
         if (!this.Claimed.IsEmpty)
         {
-            Vertex eyeVertex = null, vertex = null;
+            Vertex? eyeVertex = null, vertex = null;
             double maxDistance = 0;
-            var eyeFace = this.Claimed.First.Face;
+            var eyeFace = this.Claimed.First!.Face!;
             for (vertex = eyeFace.Outside; vertex != null && vertex.Face == eyeFace; vertex = vertex.Next)
             {
                 var distance = eyeFace.DistanceToPlane(vertex.Point);
@@ -883,7 +882,7 @@ class QuickhullCS
     public void Build()
     {
         int iterations = 0;
-        Vertex eyeVertex = null;
+        Vertex? eyeVertex = null;
 
         var (v0, v1, v2, v3) = ComputeTetrahedronExtremes();
         if (AllPointsBelongToPlane(v0, v1, v2))

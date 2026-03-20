@@ -211,7 +211,7 @@ static class ColladaWriter
             {
                 for (int j = 0; j < attr; j++)
                 {
-                    var idx = geo.Indices.Indices16 != null ? geo.Indices.Indices16[i] : geo.Indices.Indices32[i];
+                    var idx = geo.Indices[i];
                     if (!first) pRefs.Append(" ");
                     pRefs.Append(dc.BaseVertex + idx);
                     first = false;

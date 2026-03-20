@@ -7,8 +7,8 @@ public record struct TranslationKeyframe(float Time, Vector3 Translation);
 
 public class TranslationChannel
 {
-    public TranslationKeyframe[] Keyframes;
-    public string Target;
+    public TranslationKeyframe[] Keyframes = [];
+    public string Target = "";
 
     public TranslationChannel Clone()
     {

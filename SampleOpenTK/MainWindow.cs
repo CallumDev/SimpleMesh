@@ -19,11 +19,11 @@ namespace SampleOpenTK
 {
     partial class MainWindow : GameWindow
     {
-        private Shader diffuseShader;
-        private Shader pbrShader;
+        private Shader diffuseShader = null!;
+        private Shader pbrShader = null!;
+        private Render2D text = null!;
 
-        private Render2D text;
-        private List<Button> buttons = new List<Button>();
+        private List<Button> buttons;
         private Button openButton;
         private Button saveButton;
         private Button saveGltfButton;
@@ -33,45 +33,23 @@ namespace SampleOpenTK
         private Dictionary<string, int> textures = new Dictionary<string, int>();
         private int nullTexture;
 
-        private string openfile = null;
-        private Model model;
-        private ModelInstance instance;
-        
-        private Button down = null;
+        private string? openfile = null;
+        private Model? model;
+        private ModelInstance? instance;
+
         private float rotateY = 0;
         private float rotateX = 0;
-        
+
         private float zoom = 1;
         private float modelRadius = 1;
         private Dictionary<VertexAttributes, VertexBuffer> buffers = new();
-        
+
         private bool pbrEnabled = true;
         private bool hasPbr = false;
-        
+
         public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
             gameWindowSettings, nativeWindowSettings)
         {
-        }
-        
-
-        protected override unsafe void OnLoad()
-        {
-            base.OnLoad();
-            diffuseShader = new Shader(VERTEX_SHADER, DIFFUSE_FRAGMENT_SHADER);
-            diffuseShader.SetI("mat_texture", 0);
-            diffuseShader.SetI("mat_emissiveTexture", 1);
-            diffuseShader.SetI("mat_normalTexture", 2);
-            pbrShader = new Shader(VERTEX_SHADER, PBR_FRAGMENT_SHADER);
-            pbrShader.SetI("mat_texture", 0);
-            pbrShader.SetI("mat_emissiveTexture", 1);
-            pbrShader.SetI("mat_normalTexture", 2);
-            pbrShader.SetI("mat_metallicRoughnessTexture", 3);
-            //Setup null texture
-            nullTexture = GL.GenTexture();
-            uint white = 0xFFFFFFFF;
-            GL.BindTexture(TextureTarget.Texture2D, nullTexture);
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, 1, 1, 0,
-                PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)(&white));
 
             openButton = new Button("Open...", 5, 5, () =>
             {
@@ -110,10 +88,32 @@ namespace SampleOpenTK
             pbrButton = new Button("PBR Enabled", 5, 145, () =>
             {
                 pbrEnabled = !pbrEnabled;
-                pbrButton.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
+                pbrButton!.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
             });
 
             buttons = [openButton];
+        }
+
+
+        protected override unsafe void OnLoad()
+        {
+            base.OnLoad();
+            diffuseShader = new Shader(VERTEX_SHADER, DIFFUSE_FRAGMENT_SHADER);
+            diffuseShader.SetI("mat_texture", 0);
+            diffuseShader.SetI("mat_emissiveTexture", 1);
+            diffuseShader.SetI("mat_normalTexture", 2);
+            pbrShader = new Shader(VERTEX_SHADER, PBR_FRAGMENT_SHADER);
+            pbrShader.SetI("mat_texture", 0);
+            pbrShader.SetI("mat_emissiveTexture", 1);
+            pbrShader.SetI("mat_normalTexture", 2);
+            pbrShader.SetI("mat_metallicRoughnessTexture", 3);
+            //Setup null texture
+            nullTexture = GL.GenTexture();
+            uint white = 0xFFFFFFFF;
+            GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, 1, 1, 0,
+                PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)(&white));
+            //text renderer
             text = new Render2D();
         }
 
@@ -136,19 +136,19 @@ namespace SampleOpenTK
             zoom += e.OffsetY / 8.0f;
         }
 
-      
-        
+
+
         void SaveModel(string filename, ModelSaveFormat format)
         {
             if (model == null) return;
             using var stream = File.Create(filename);
-            model.SaveTo(stream, format);
+            model!.SaveTo(stream, format);
         }
 
         void LoadModel(string filename)
         {
             var sw = Stopwatch.StartNew();
-            model = Model.FromFile(filename)
+            var m = Model.FromFile(filename)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
                 .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
                 .CalculateNormals() // Calculate missing normals
@@ -156,22 +156,22 @@ namespace SampleOpenTK
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
             openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";
-            if (model.Generator != null)
+            if (m.Generator != null)
             {
-                openfile += $"\nGenerator: {model.Generator}";
+                openfile += $"\nGenerator: {m.Generator}";
             }
 
-            if (model.Copyright != null)
+            if (m.Copyright != null)
             {
-                openfile += $"\nCopyright: {model.Copyright}";
+                openfile += $"\nCopyright: {m.Copyright}";
             }
             foreach (var tex in textures)
                 GL.DeleteTexture(tex.Value);
             textures = new(StringComparer.OrdinalIgnoreCase);
 
-            if (model.Images != null)
+            if (m.Images != null)
             {
-                foreach (var kv in model.Images)
+                foreach (var kv in m.Images)
                 {
                     if (!textures.ContainsKey(kv.Key))
                     {
@@ -188,21 +188,20 @@ namespace SampleOpenTK
             foreach (var v in buffers.Values)
                 v.Dispose();
             buffers = new();
-            foreach (var g in model.Geometries)
+            foreach (var g in m.Geometries)
             {
                 if (!buffers.TryGetValue(g.Vertices.Descriptor.Attributes, out var vb))
                 {
                     vb = new VertexBuffer();
                     buffers[g.Vertices.Descriptor.Attributes] = vb;
                 }
-                var x = vb.Add(g);
-                g.UserTag = new BufferOffset() { Buffer = vb, BaseVertex = x.VertexOffset, StartIndex = x.IndexOffset };
+                g.UserTag = vb.Add(g);
             }
 
             foreach (var v in buffers.Values)
                 v.Create();
 
-            hasPbr = pbrEnabled = model.Materials.Any(x => x.Value.MetallicRoughness);
+            hasPbr = pbrEnabled = m.Materials.Any(x => x.Value.MetallicRoughness);
             if (hasPbr)
             {
                 pbrButton.Text = "PBR Enabled";
@@ -213,53 +212,49 @@ namespace SampleOpenTK
                 buttons = new List<Button>(new[] { openButton, saveButton, saveColladaButton, saveGltfButton });
 
             int y = 5;
-            if (model.Animations != null)
+            if (m.Animations != null)
             {
-                foreach (var anim in model.Animations)
+                foreach (var anim in m.Animations)
                 {
                     buttons.Add(new Button(anim.Name ?? "ANIMATION", 200, y,
-                        () => { instance.Animator.Instances.Add(new AnimationInstance() { Animation = anim }); }));
+                        () => { instance!.Animator.Instances.Add(new AnimationInstance(anim)); }));
                     y += 35;
                 }
             }
 
             modelRadius = 0;
-            for (int i = 0; i < model.Roots.Length; i++)
+            for (int i = 0; i < m.Roots.Length; i++)
             {
-                GetRadius(model.Roots[i], Matrix4x4.Identity, ref modelRadius);
+                GetRadius(m.Roots[i], Matrix4x4.Identity, ref modelRadius);
             }
 
             if (modelRadius <= 0)
                 modelRadius = 1;
 
-            instance = new ModelInstance(model);
+            model = m;
+            instance = new ModelInstance(m);
         }
 
-        class BufferOffset
+
+
+        void BindTexture(TextureInfo? tex, TextureUnit unit)
         {
-            public VertexBuffer Buffer;
-            public int BaseVertex;
-            public int StartIndex;
+            GL.ActiveTexture(unit);
+            if (tex == null ||
+                string.IsNullOrWhiteSpace(tex.Name) ||
+                !textures.TryGetValue(tex.Name, out var pbrTex))
+            {
+                GL.BindTexture(TextureTarget.Texture2D, nullTexture);
+            }
+            else
+            {
+                GL.BindTexture(TextureTarget.Texture2D, pbrTex);
+            }
         }
 
         //Unsafe required to use System.Numerics under OpenTK
-        unsafe void DrawNode(InstanceNode node, Matrix4x4 world, ref SkinInstance boundSkin, ref int boundVao)
+        unsafe void DrawNode(InstanceNode node, Matrix4x4 world, ref SkinInstance? boundSkin, ref int boundVao)
         {
-            void BindTexture(TextureInfo tex, TextureUnit unit)
-            {
-                GL.ActiveTexture(unit);
-                if (tex == null ||
-                    string.IsNullOrWhiteSpace(tex.Name) ||
-                    !textures.TryGetValue(tex.Name, out var pbrTex))
-                {
-                    GL.BindTexture(TextureTarget.Texture2D, nullTexture);
-                }
-                else
-                {
-                    GL.BindTexture(TextureTarget.Texture2D, pbrTex);
-                }
-            }
-
             var mymat = node.Transform * world;
             var geo = node.Node.Geometry;
             if (geo != null) //some models will have empty nodes purely for transforms
@@ -272,7 +267,7 @@ namespace SampleOpenTK
 
                 pbrShader.Set("world", mymat);
                 pbrShader.Set("normalmat", normalmat);
-                var off = (BufferOffset)geo.UserTag;
+                var off = (BufferOffset)geo.UserTag!;
                 if (boundVao != off.Buffer.VAO)
                 {
                     GL.BindVertexArray(off.Buffer.VAO);
@@ -288,7 +283,7 @@ namespace SampleOpenTK
                     diffuseShader.SetSpan("Bones", node.Skin.Matrices);
                     pbrShader.SetSpan("Bones", node.Skin.Matrices);
                 }
-                
+
 
                 foreach (var tg in geo.Groups)
                 {
@@ -318,7 +313,7 @@ namespace SampleOpenTK
                     sh.SetI("texcoord_emissive", tg.Material.EmissiveTexture?.CoordinateIndex ?? 0);
                     BindTexture(tg.Material.DiffuseTexture, TextureUnit.Texture0);
                     GL.DrawElementsBaseVertex(
-                        geo.Kind == GeometryKind.Lines ? BeginMode.Lines : BeginMode.Triangles,
+                        geo.Kind == GeometryKind.Lines ? PrimitiveType.Lines : PrimitiveType.Triangles,
                         tg.IndexCount, off.Buffer.IsIndex32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort,
                         (IntPtr)((tg.StartIndex + off.StartIndex) * (off.Buffer.IsIndex32 ? 4 : 2)),
                         off.BaseVertex + tg.BaseVertex
@@ -379,8 +374,8 @@ namespace SampleOpenTK
                 rotateX -= (float)args.Time * 2;
             }
 
-            if (model != null)
-            { 
+            if (instance != null)
+            {
                 //generate camera matrix based off model dimensions
                 var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60),
                     (float)Size.X / Size.Y,
@@ -404,7 +399,7 @@ namespace SampleOpenTK
                 instance.UpdateTransforms();
                 //draw starting at first root node.
                 int boundVao = 0;
-                SkinInstance boundSkin = null;
+                SkinInstance? boundSkin = null;
                 for (int i = 0; i < instance.Roots.Length; i++)
                 {
                     DrawNode(instance.Roots[i], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX),

@@ -7,21 +7,28 @@ namespace SimpleMesh
 {
     public class Geometry
     {
-        public string Name;
+        public string Name = "";
         public GeometryKind Kind;
         public VertexArray Vertices;
         public Indices Indices;
-        public TriangleGroup[] Groups;
+        public TriangleGroup[] Groups = [];
 
         public Vector3 Center;
         public Vector3 Min;
         public Vector3 Max;
         public float Radius;
 
+        public Geometry(VertexArray vertices, Indices indices)
+        {
+            Vertices = vertices;
+            Indices = indices;
+        }
+
+
         /// <summary>
         /// Runtime tag reference, not saved to disk.
         /// </summary>
-        public object UserTag;
+        public object? UserTag;
 
         public void CalculateBounds()
         {
@@ -69,7 +76,7 @@ namespace SimpleMesh
 
                 Tangents = new Vector4[count];
                 Source = new int[count];
-                
+
                 int vtx = 0;
                 for (int i = 0; i < g.Groups.Length; i++)
                 {
@@ -84,7 +91,7 @@ namespace SimpleMesh
             public int GetNumFaces() => Original.Count / 3;
 
             public int GetNumVerticesOfFace(int index) => 3;
-            
+
             int Index(int faceIndex, int faceVertex) => faceIndex * 3 + faceVertex;
 
             public Vector3 GetPosition(int faceIndex, int faceVertex) =>
@@ -96,10 +103,10 @@ namespace SimpleMesh
             public Vector2 GetTexCoord(int faceIndex, int faceVertex) =>
                 Original.Texture1[Source[Index(faceIndex, faceVertex)]];
 
-            public void SetTangent(Vector4 tangent, int faceIndex, int faceVertex) => 
+            public void SetTangent(Vector4 tangent, int faceIndex, int faceVertex) =>
                 Tangents[Index(faceIndex, faceVertex)] = tangent;
         }
-        
+
         public void CalculateTangents(bool overwrite = false)
         {
             if ((Has(VertexAttributes.Tangent) & !overwrite) || Kind == GeometryKind.Lines ||
@@ -128,7 +135,7 @@ namespace SimpleMesh
             Indices = Indices.FromBuffer(indexArray.ToArray());
             Vertices = vb.Finish();
         }
-        
+
         public void CalculateNormals(bool overwrite = false)
         {
             if ((Has(VertexAttributes.Normal) && !overwrite) || Kind == GeometryKind.Lines)
@@ -139,7 +146,7 @@ namespace SimpleMesh
             {
                 Vertices.Normal[i] = Vector3.Zero;
             }
-            
+
             for (int i = 0; i < Groups.Length; i++)
             {
                 var bv = Groups[i].BaseVertex;
@@ -150,7 +157,7 @@ namespace SimpleMesh
                     var i0 = (int)(Indices[indexArray] + bv);
                     var i1 = (int)(Indices[indexArray + 1] + bv);
                     var i2 = (int)(Indices[indexArray + 2] + bv);
-                    
+
                     Vector3 p0 = Vertices.Position[i0];
                     Vector3 p1 = Vertices.Position[i1];
                     Vector3 p2 = Vertices.Position[i2];
@@ -174,14 +181,12 @@ namespace SimpleMesh
                 }
             }
         }
-        
 
-        internal Geometry Clone(Model model) => new Geometry()
+
+        internal Geometry Clone(Model model) => new Geometry(Vertices.Clone(), Indices.Clone())
         {
             Name = Name,
             Kind = Kind,
-            Vertices = Vertices.Clone(),
-            Indices = Indices.Clone(),
             Groups = Groups.Select(x => x.Clone(model)).ToArray(),
             Center = Center,
             Min = Min,
@@ -192,6 +197,6 @@ namespace SimpleMesh
 
         internal bool Has(VertexAttributes attributes) =>
             (Vertices.Descriptor.Attributes & attributes) == attributes;
-        
+
     }
 }

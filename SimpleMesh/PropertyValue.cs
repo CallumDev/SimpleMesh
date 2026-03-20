@@ -1,11 +1,12 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
 
 namespace SimpleMesh
 {
-    public struct PropertyValue
+    public readonly struct PropertyValue
     {
         public object Value { get; }
         public PropertyValue(string value) => Value = value;
@@ -16,7 +17,7 @@ namespace SimpleMesh
         public PropertyValue(float[] value) => Value = value;
         public PropertyValue(Vector3 value) => Value = value;
 
-        public override string ToString() => Value.ToString();
+        public override string ToString() => Value?.ToString() ?? "(null)";
 
         public bool AsString(out string v)
         {
@@ -107,16 +108,16 @@ namespace SimpleMesh
             }
         }
 
-        public bool AsIntArray(out int[] v)
+        public bool AsIntArray([NotNullWhen(true)]out int[]? v)
         {
             v = null;
             switch (Value)
             {
                 case float f:
-                    v = new[] {(int) f};
+                    v = [(int) f];
                     return true;
                 case int i:
-                    v = new[] {i};
+                    v = [i];
                     return true;
                 case int[] ia:
                     v = ia;
@@ -125,23 +126,23 @@ namespace SimpleMesh
                     v = fa.Select(x => (int) x).ToArray();
                     return true;
                 case Vector3 v3:
-                    v = new[] {(int) v3.X, (int) v3.Y, (int) v3.Z};
+                    v = [(int) v3.X, (int) v3.Y, (int) v3.Z];
                     return true;
                 default:
                     return false;
             }
         }
 
-        public bool AsFloatArray(out float[] v)
+        public bool AsFloatArray([NotNullWhen(true)]out float[]? v)
         {
             v = null;
             switch (Value)
             {
                 case float f:
-                    v = new[] { f};
+                    v = [f];
                     return true;
                 case int i:
-                    v = new[] { (float)i };
+                    v = [(float)i];
                     return true;
                 case int[] ia:
                     v = ia.Select(x => (float) x).ToArray();
@@ -150,7 +151,7 @@ namespace SimpleMesh
                     v = fa;
                     return true;
                 case Vector3 v3:
-                    v = new[] {v3.X, v3.Y, v3.Z};
+                    v = [v3.X, v3.Y, v3.Z];
                     return true;
                 default:
                     return false;

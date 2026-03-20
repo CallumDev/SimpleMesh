@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -21,20 +22,20 @@ public class Hull
 {
     private Vector3[] vertices;
     private int[] indices;
-    
+
     public ReadOnlySpan<Vector3> Vertices => vertices;
     public ReadOnlySpan<int> Indices => indices;
-    
+
     public int FaceCount => indices.Length / 3;
-    
+
     public HullKind Kind { get; private set; }
 
     public AppliedRepairs Repairs { get; private set; }
-    
+
     public Vector3 Min { get; private set; }
-    
+
     public Vector3 Max { get; private set; }
-    
+
     public float Volume { get; private set; }
 
     public Point3<int> GetFace(int faceIndex)
@@ -44,7 +45,7 @@ public class Hull
         faceIndex *= 3;
         return new(indices[faceIndex], indices[faceIndex + 1], indices[faceIndex + 2]);
     }
-    
+
     public Vector3 FaceNormal(int faceIndex)
     {
         if(faceIndex < 0 || faceIndex >= FaceCount)
@@ -76,13 +77,19 @@ public class Hull
         var center = (p1 + p2 + p3) / 3f;
         return center;
     }
-    
-    private Hull() { }
+
+    private Hull(Vector3[] v, int[] i)
+    {
+        vertices = v;
+        indices = i;
+    }
 
 
     private const float MergeThreshold = 0.0000001f;
-    
-    static bool BuildQH(Quickhull.QuickhullCS qh, out Vector3[] newVertices, out int[] newIndices)
+
+    static bool BuildQH(Quickhull.QuickhullCS qh,
+        [NotNullWhen(true)]out Vector3[]? newVertices,
+        [NotNullWhen(true)]out int[]? newIndices)
     {
         try
         {
@@ -117,14 +124,14 @@ public class Hull
                 return false;
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
             newVertices = null;
             newIndices = null;
             return false;
         }
     }
-    
+
     public bool MakeConvex(bool force = false)
     {
         if (Kind == HullKind.Convex && !force)
@@ -140,7 +147,7 @@ public class Hull
         return false;
     }
 
-    public static bool TryQuickhull(Vector3[] points, out Hull hull)
+    public static bool TryQuickhull(Vector3[] points, [NotNullWhen(true)]out Hull? hull)
     {
         var qh = new Quickhull.QuickhullCS(points);
         if (BuildQH(qh, out var nV, out var nI))
@@ -151,11 +158,11 @@ public class Hull
         hull = null;
         return false;
     }
-    
+
     static int GetMergedIndex(Vector3 item, IList<Vector3> vecs)
     {
-        for (int i = 0; i < vecs.Count; i++) 
-        {        
+        for (int i = 0; i < vecs.Count; i++)
+        {
             if (Math.Abs(vecs[i].X - item.X) < MergeThreshold &&
                 Math.Abs(vecs[i].Y - item.Y) < MergeThreshold &&
                 Math.Abs(vecs[i].Z - item.Z) < MergeThreshold)
@@ -165,7 +172,7 @@ public class Hull
         }
         return -1;
     }
-    
+
     public static Hull FromGeometry(Geometry geometry)
     {
         if (geometry.Kind != GeometryKind.Triangles) {
@@ -179,13 +186,11 @@ public class Hull
         {
             for (int j = 0; j < geometry.Groups[i].IndexCount; j++)
             {
-                var srcIndex = geometry.Indices.Indices32 != null
-                    ? geometry.Indices.Indices32[geometry.Groups[i].StartIndex + j]
-                    : geometry.Indices.Indices16[geometry.Groups[i].StartIndex + j];
+                var srcIndex = geometry.Indices[geometry.Groups[i].StartIndex + j];
                 var idx = (int)(geometry.Groups[i].BaseVertex + srcIndex);
 
                 var merged = GetMergedIndex(geometry.Vertices.Position[idx], vertexArray);
-                if (merged == -1) 
+                if (merged == -1)
                 {
                     indexArray.Add(vertexArray.Count);
                     vertexArray.Add(geometry.Vertices.Position[idx]);
@@ -198,7 +203,7 @@ public class Hull
         }
         return CreateInternal(vertexArray.ToArray(), indexArray.ToArray());
     }
-    
+
     public static Hull FromTriangles(IReadOnlyList<Vector3> vertices, IReadOnlyList<int> indices, bool merge = true)
     {
         if (indices.Count <= 0 || indices.Count % 3 != 0)
@@ -226,14 +231,14 @@ public class Hull
 
     static Hull CreateInternal(Vector3[] vertices, int[] indices)
     {
-        var h = new Hull() { vertices = vertices, indices = indices };
+        var h = new Hull(vertices, indices);
         h.Calculate();
         return h;
     }
-    
+
     const float ZeroArea = 1e-6f;
     const float Planar = 1e-5f;
-    
+
     float CalculateVolume()
     {
         float totalVolume = 0.0f;
@@ -250,7 +255,7 @@ public class Hull
         return totalVolume;
     }
 
-    // This method modifies the indices array 
+    // This method modifies the indices array
     bool FixNormals(Edge[] edgesSorted, int[] edgeFaces, Point2<int>[] groups)
     {
         // Check for multibody and calculate adjacency
@@ -317,14 +322,14 @@ public class Hull
         var edges = Edge.ArrayFromFaces(faces, out var edgeFaces);
         var edgesSorted = edges.Select(x => x.Sorted()).ToArray();
         var groups = DuplicatePairIndices(edgesSorted);
-        
+
 
         if (groups.Length * 2 != edges.Length)
         {
             Kind = HullKind.NonWatertight;
             return;
         }
-        
+
         if (!IsWindingConsistent(edges, groups))
         {
             if (!FixNormals(edgesSorted, edgeFaces, groups))
@@ -336,8 +341,8 @@ public class Hull
             edges = Edge.ArrayFromFaces(faces, out edgeFaces);
             edgesSorted = edges.Select(x => x.Sorted()).ToArray();
             groups = DuplicatePairIndices(edgesSorted);
-        } 
-        else if (CalculateVolume() < 0) 
+        }
+        else if (CalculateVolume() < 0)
         {
             // Invert if needed
             for (int i = 0; i < faces.Length; i++)
@@ -351,7 +356,7 @@ public class Hull
             groups = DuplicatePairIndices(edgesSorted);
             Repairs |= AppliedRepairs.FlippedNormals;
         }
-        
+
         // is_winding_consistent is considered to be true now
 
         BitArray nonzero = new BitArray(faces.Length);
@@ -375,7 +380,7 @@ public class Hull
             Kind = HullKind.Multibody;
             return;
         }
-        
+
         BitArray adj_ok = new BitArray(adjacency.Length);
         for (int i = 0; i < adjacency.Length; i++) {
             adj_ok[i] = nonzero[adjacency[i].A] && nonzero[adjacency[i].B];
@@ -419,7 +424,7 @@ public class Hull
 
         var edgesA = adjacencyEdges.Select(x => x.A).ToArray();
         var edgesB = adjacencyEdges.Select(x => x.B).ToArray();
-        
+
         for (int i = 0; i < 2; i++)
         {
             var fid = adjacency.Select(x => i == 0 ? x.A : x.B).ToArray();
@@ -473,7 +478,7 @@ public class Hull
 
         return vidUnshared;
     }
-    
+
     static (Point2<int>[] adjacency, Edge[] adjacencyEdges) CalculateAdjacency(
         Edge[] edgesSorted,
         int[] edgeFaces,
@@ -512,7 +517,7 @@ public class Hull
         return true;
     }
 
-    static Point2<int>[] DuplicatePairIndices<T>(T[] array)
+    static Point2<int>[] DuplicatePairIndices<T>(T[] array) where T : notnull
     {
         var duplicates = new List<Point2<int>>();
         var seenIndices = new Dictionary<T, List<int>>();

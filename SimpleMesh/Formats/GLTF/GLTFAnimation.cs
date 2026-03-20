@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text.Json;
+using SimpleMesh.Util;
 
 namespace SimpleMesh.Formats.GLTF;
 
@@ -15,11 +16,13 @@ static class GLTFAnimation
     }
 
     record struct Sampler(GLTFBufferAccessor Time, GLTFBufferAccessor Value, Interp Interpolation);
-    public static Animation FromGLTF(JsonElement element, GLTFBufferAccessor[] accessors, string[] names)
+    public static Animation FromGLTF(JsonElement element, GLTFBufferAccessor[] accessors, string[] names, int index)
     {
         var a = new Animation();
-        if (element.TryGetProperty("name", out var nameProp))
-            a.Name = nameProp.GetString();
+        if (element.TryGetStringProperty("name", out var nameProp))
+            a.Name = nameProp;
+        else
+            a.Name = $"animation#{index}";
         var smp = new List<Sampler>();
         if (element.TryGetProperty("samplers", out var samplers))
         {
@@ -27,7 +30,9 @@ static class GLTFAnimation
             {
                 var input = s.GetProperty("input").GetInt32();
                 var output = s.GetProperty("output").GetInt32();
-                var interp = Enum.Parse<Interp>(s.GetProperty("interpolation").GetString());
+                Interp interp = Interp.LINEAR;
+                if (s.TryGetStringProperty("interpolation", out var iProp))
+                    interp = Enum.Parse<Interp>(iProp);
                 smp.Add(new Sampler(accessors[input], accessors[output], interp));
             }
         }
@@ -87,5 +92,5 @@ static class GLTFAnimation
         }
         return a;
     }
-    
+
 }

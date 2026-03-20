@@ -56,7 +56,7 @@ namespace SimpleMesh
                    JointWeights.Equals(other.JointWeights);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is Vertex other && Equals(other);
         }

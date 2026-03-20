@@ -17,24 +17,32 @@ namespace ConvexHullSample
 {
     partial class MainWindow : GameWindow
     {
-        private Render2D text;
-        public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
-        {
-        }
+        private Render2D text = null!;
+        private Shader diffuseShader = null!;
 
-        //Handle Input
-
-        private List<Button> buttons = new List<Button>();
-        
-        private Shader diffuseShader;
-        
+        private List<Button> buttons;
         private Button openButton;
         private Button quickhullButton;
-        
-        protected override unsafe void OnLoad()
+
+
+        private float rotateY = 0;
+        private float rotateX = 0;
+        private float zoom = 1;
+
+
+        private Model? model;
+        private Hull? displayed;
+        private float modelRadius = 1;
+
+        private int meshVao;
+        private int meshVbo;
+        private int meshEbo;
+
+        private string statusText = "";
+        private double statusTimer = 5;
+
+        public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
-            base.OnLoad();
-            diffuseShader = new Shader(MeshVertexShader, MeshFragmentShader);
             openButton = new Button("Open...", 5, 5, () =>
             {
                 var openfile = FilePicker.OpenFile();
@@ -49,20 +57,25 @@ namespace ConvexHullSample
                         Console.WriteLine(e);
                     }
                 }
-                    
+
             });
             quickhullButton = new Button("Quickhull", 5, 40, QuickhullModel);
             buttons = [openButton];
+        }
+
+        protected override unsafe void OnLoad()
+        {
+            base.OnLoad();
+            diffuseShader = new Shader(MeshVertexShader, MeshFragmentShader);
             text = new Render2D();
         }
 
-        private Button down = null;
         protected override void OnMouseDown(MouseButtonEventArgs e)
         {
             foreach(var b in buttons)
                 b.OnMouseDown(e, MousePosition, text);
         }
-        
+
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
             foreach(var b in buttons)
@@ -70,38 +83,22 @@ namespace ConvexHullSample
             base.OnMouseUp(e);
         }
 
-        private float zoom = 1;
 
         protected override void OnMouseWheel(MouseWheelEventArgs e)
         {
             zoom += e.OffsetY / 8.0f;
         }
 
-        private float rotateY = 0;
-        private float rotateX = 0;
-        
-
-        private Model model;
-
-        private int meshVao;
-        private int meshVbo;
-        private int meshEbo;
-        
-        private string statusText = "";
-        private double statusTimer = 5;
-
         void QuickhullModel()
         {
-            if (!displayed.MakeConvex(true))
+            if (!displayed!.MakeConvex(true))
             {
                 statusText = "Error running quickhull";
                 statusTimer = 5;
             }
-            SetupHull(displayed);
+            SetupHull(displayed!);
         }
-        
-        private Hull displayed;
-        private float modelRadius = 1;
+
         unsafe void SetupHull(Hull h)
         {
             displayed = h;
@@ -121,7 +118,7 @@ namespace ConvexHullSample
             meshVao = GL.GenVertexArray();
             meshEbo = GL.GenBuffer();
             meshVbo = GL.GenBuffer();
-            
+
             GL.BindVertexArray(meshVao);
             GL.BindBuffer(BufferTarget.ArrayBuffer, meshVbo);
             GL.BufferData(BufferTarget.ArrayBuffer, sizeof(DisplayVertex) * vertices.Length, vertices, BufferUsageHint.StaticDraw);
@@ -140,9 +137,9 @@ namespace ConvexHullSample
             model = Model.FromFile(filename)
                 .AutoselectRoot(out _); //try discard empty nodes at root (think blender cameras etc.)
             sw.Stop();
-            SetupHull(Hull.FromGeometry(model.Roots[0].Geometry));
+            SetupHull(Hull.FromGeometry(model.Roots[0].Geometry!));
         }
-        
+
         protected override void OnRenderFrame(FrameEventArgs args)
         {
             var sz = this.ClientSize;
@@ -161,7 +158,7 @@ namespace ConvexHullSample
             {
                 rotateY -= (float)args.Time * 2;
             }
-            
+
             if (IsKeyDown(Keys.Up))
             {
                 rotateX += (float) args.Time * 2;
@@ -170,7 +167,7 @@ namespace ConvexHullSample
             {
                 rotateX -= (float)args.Time * 2;
             }
-            
+
             var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60), (float) Size.X / Size.Y,
                 0.02f, 10000);
             var campos = new Vector3(0, 0, (-2 * modelRadius) * zoom);
@@ -178,12 +175,12 @@ namespace ConvexHullSample
             var vp = view * projection;
             var world = Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX);
             Matrix4x4.Invert(world, out var normalmat);
-            
+
             if (displayed != null)
             {
                 GL.BindVertexArray(meshVao);
                 //generate camera matrix based off hull dimensions
-                
+
                 diffuseShader.Set("viewprojection", vp);
                 diffuseShader.Set("light_direction", -0.49999f, 0.707107f, 0.5f);
                 diffuseShader.Set("world", world);
@@ -192,7 +189,7 @@ namespace ConvexHullSample
                 GL.DrawElements(PrimitiveType.Triangles, displayed.Indices.Length, DrawElementsType.UnsignedShort,
                     IntPtr.Zero);
             }
-            
+
             //Draw UI
             text.Start(sz.X, sz.Y);
             foreach (var b in buttons)
@@ -217,9 +214,9 @@ Volume: {displayed.Volume}",
                 text.DrawString(statusText, 5, 320);
                 statusTimer -= args.Time;
             }
-            
-           
-            
+
+
+
             text.DrawString("Mouse Wheel - Zoom, Keyboard Up/Down/Left/Right - Rotate", 5, sz.Y - 60);
             text.Finish();
             SwapBuffers();

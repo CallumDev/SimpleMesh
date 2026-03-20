@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -10,7 +11,7 @@ namespace SimpleMesh.Formats.GLTF;
 
 internal static class GLTFWriter
 {
-    private static JsonNode AssetNode(string copyright, string generator)
+    private static JsonNode AssetNode(string? copyright, string? generator)
     {
         var node = new JsonObject
         {
@@ -25,7 +26,7 @@ internal static class GLTFWriter
 
     private static JsonNode FromMaterial(Material src, Dictionary<string, int> textureMap)
     {
-        bool GetTextureJson(TextureInfo info, out JsonObject obj)
+        bool GetTextureJson(TextureInfo? info, [NotNullWhen(true)]out JsonObject? obj)
         {
             obj = null;
             if (info == null || string.IsNullOrEmpty(info.Name) ||
@@ -117,12 +118,9 @@ internal static class GLTFWriter
         var groups = new List<JsonObject>();
         foreach (var tg in g.Groups)
         {
-            var indices = new int[tg.IndexCount];
+            var indices = new uint[tg.IndexCount];
             for (var i = 0; i < tg.IndexCount; i++)
-                if (g.Indices.Indices16 != null)
-                    indices[i] = g.Indices.Indices16[tg.StartIndex + i] + tg.BaseVertex;
-                else
-                    indices[i] = (int) (g.Indices.Indices32[tg.StartIndex + i] + tg.BaseVertex);
+                indices[i] = (uint)(g.Indices[tg.StartIndex + i] + tg.BaseVertex);
             var attrObject = new JsonObject();
             foreach (var o in attributes)
                 attrObject.Add(o.name, o.index);
@@ -277,15 +275,17 @@ internal static class GLTFWriter
         using var bufferStream = new MemoryStream();
         var bufferWriter = new BinaryWriter(bufferStream);
 
-        var ctx = new GLTFContext {Json = json, BufferWriter = bufferWriter};
-        foreach (var r in model.Roots) WalkNode(r, ctx.NodeIndices);
+        var nodeIndices = new Dictionary<ModelNode, int>();
+        foreach (var r in model.Roots) WalkNode(r, nodeIndices);
+        var allNodes = new JsonObject[nodeIndices.Count];
 
-        ctx.Nodes = new JsonObject[ctx.NodeIndices.Count];
+        var ctx = new GLTFContext(bufferWriter, allNodes, nodeIndices);
+
         json.Add("asset", AssetNode(model.Copyright, model.Generator));
 
 
         Dictionary<string, int> textureMap = new Dictionary<string, int>();
-        if (model.Images != null && model.Images.Count > 0)
+        if (model.Images.Count > 0)
         {
             var (images, textures, index) = CreateImages(model.Images, ctx);
             json.Add("images", images);
@@ -333,7 +333,7 @@ internal static class GLTFWriter
             jsonWriter.Flush();
             while((jsonStream.Position % 4) != 0) //Pad with space
                 jsonStream.WriteByte(0x20);
-            
+
             var jsonBuffer = jsonStream.ToArray();
             using var glbWriter = new BinaryWriter(outStream);
             glbWriter.Write(GLBLoader.GLTF_MAGIC);
@@ -369,16 +369,15 @@ internal static class GLTFWriter
         Texture
     }
 
-    private class GLTFContext
+    private class GLTFContext(BinaryWriter bufferWriter, JsonObject[] nodes, Dictionary<ModelNode, int> nodeIndices)
     {
         public readonly List<JsonObject> Accessors = new();
         public readonly List<JsonObject> BufferViews = new();
-        public BinaryWriter BufferWriter;
+        public BinaryWriter BufferWriter = bufferWriter;
         public readonly List<JsonObject> Geometries = new();
-        public JsonObject Json;
         public readonly Dictionary<Material, int> MaterialIndices = new();
-        public readonly Dictionary<ModelNode, int> NodeIndices = new();
-        public JsonObject[] Nodes;
+        public readonly Dictionary<ModelNode, int> NodeIndices = nodeIndices;
+        public JsonObject[] Nodes = nodes;
 
 
         private int CreateBufferView(int start, int length, BufferTarget target)
@@ -422,7 +421,7 @@ internal static class GLTFWriter
             while(BufferWriter.BaseStream.Position % 4 != 0)
                 BufferWriter.Write((byte)0);
         }
-        
+
         public int AddVector3(Vector3[] source, bool position, BufferTarget target)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
@@ -523,7 +522,7 @@ internal static class GLTFWriter
             });
             return Accessors.Count - 1;
         }
-        
+
         public int AddVector2(VertexArray.Accessor<Vector2> source)
         {
             var byteStart = (int) BufferWriter.BaseStream.Position;
@@ -585,7 +584,7 @@ internal static class GLTFWriter
             return Accessors.Count - 1;
         }
 
-        public int AddIndices(int[] source)
+        public int AddIndices(uint[] source)
         {
             var useShort = source.All(x => x <= ushort.MaxValue);
             var byteStart = (int) BufferWriter.BaseStream.Position;

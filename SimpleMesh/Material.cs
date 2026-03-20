@@ -6,16 +6,16 @@ namespace SimpleMesh
     
     public class Material
     {
-        public string Name;
+        public string Name = "";
         public LinearColor DiffuseColor;
         public Vector3 EmissiveColor;
-        public TextureInfo DiffuseTexture;
-        public TextureInfo EmissiveTexture;
-        public TextureInfo NormalTexture;
+        public TextureInfo? DiffuseTexture;
+        public TextureInfo? EmissiveTexture;
+        public TextureInfo? NormalTexture;
         public bool MetallicRoughness;
         public float MetallicFactor;
         public float RoughnessFactor;
-        public TextureInfo MetallicRoughnessTexture;
+        public TextureInfo? MetallicRoughnessTexture;
         
 
         internal Material Clone() => new()

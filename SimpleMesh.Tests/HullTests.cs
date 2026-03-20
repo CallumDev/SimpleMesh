@@ -10,9 +10,9 @@ public class HullTests
     static Geometry LoadShape(string path)
     {
         var file = Model.FromFile(path);
-        return file.Roots[0].Geometry;
+        return file.Roots[0].Geometry!;
     }
-    
+
     [Fact]
     public void WatertightSanity()
     {
@@ -30,7 +30,7 @@ public class HullTests
         var hull = Hull.FromGeometry(LoadShape("Models/concave1.obj"));
         Assert.Equal(AppliedRepairs.None, hull.Repairs);
         Assert.Equal(HullKind.Concave, hull.Kind);
-       
+
     }
 
     private static readonly Vector3[] cubeVertices = new Vector3[]
@@ -96,8 +96,8 @@ public class HullTests
         h.MakeConvex();
         Assert.Equal(HullKind.Convex, h.Kind);
     }
-    
-    
+
+
     public static IEnumerable<object[]> GetTestCases()
     {
         return Directory.GetFiles("Models", "*.json", SearchOption.AllDirectories)
@@ -112,7 +112,7 @@ public class HullTests
     {
         var options = new JsonSerializerOptions
         { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
-        var testCase = JsonSerializer.Deserialize<TestCase>(File.ReadAllText(test), options);
+        var testCase = JsonSerializer.Deserialize<TestCase>(File.ReadAllText(test), options)!;
         var shape = LoadShape($"Models/{testCase.file}");
         var hull = Hull.FromGeometry(shape);
         Assert.Equal(testCase.kind, hull.Kind);

@@ -2,23 +2,10 @@ using System;
 
 namespace SimpleMesh
 {
-    public class ImageData
+    public class ImageData(string name, byte[] data, string mimeType)
     {
-        private byte[] data;
-        
-        public string Name { get; private set; }
+        public string Name { get; private set; } = name;
         public ReadOnlySpan<byte> Data => data;
-        public string MimeType { get; private set; }
-
-        public ImageData(string name, byte[] data, string mimeType)
-        {
-            Name = name;
-            MimeType = mimeType;
-            this.data = data;
-        }
-
-        internal ImageData()
-        {
-        }
+        public string MimeType { get; private set; } = mimeType;
     }
 }

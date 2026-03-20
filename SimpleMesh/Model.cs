@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -12,17 +13,17 @@ namespace SimpleMesh
 {
     public class Model
     {
-        public ModelNode[] Roots;
-        public Geometry[] Geometries;
-        public Dictionary<string, Material> Materials;
-        public Dictionary<string, ImageData> Images;
-        public Animation[] Animations;
-        public Skin[] Skins;
+        public ModelNode[] Roots = [];
+        public Geometry[] Geometries = [];
+        public Dictionary<string, Material> Materials = new();
+        public Dictionary<string, ImageData> Images = new();
+        public Animation[] Animations = [];
+        public Skin[] Skins = [];
 
-        public string Copyright;
-        public string Generator;
+        public string? Copyright;
+        public string? Generator;
 
-        public static Model FromStream(Stream stream, IExternalResources resources = null)
+        public static Model FromStream(Stream stream, IExternalResources? resources = null)
         {
             return Autodetect.Load(stream, new ModelLoadContext() { ExternalResources = resources ?? new DisallowedResources() });
         }
@@ -74,7 +75,7 @@ namespace SimpleMesh
         {
             const float TOLERANCE = 0.000001f;
             return Math.Abs(x.X - 1) < TOLERANCE &&
-                   Math.Abs(x.Y - 1) < TOLERANCE && 
+                   Math.Abs(x.Y - 1) < TOLERANCE &&
                    Math.Abs(x.Z - 1) < TOLERANCE;
         }
 
@@ -82,14 +83,14 @@ namespace SimpleMesh
         {
             Matrix4x4.Decompose(node.Transform, out var scale, out var rotate, out var translate);
             var myScale = scale * parentScale;
-            if (!AlmostOne(myScale)) 
+            if (!AlmostOne(myScale))
             {
                 if (node.Geometry != null)
                 {
                     for (int i = 0; i < node.Geometry.Vertices.Count; i++)
                     {
                         node.Geometry.Vertices.Position[i] *= myScale;
-                        
+
                     }
                     if (node.Geometry.Has(VertexAttributes.Normal))
                     {
@@ -112,8 +113,8 @@ namespace SimpleMesh
                 ApplyScale(child, myScale);
             }
         }
-        
-        
+
+
         public Model ApplyRootTransforms(bool translate)
         {
             foreach (var m in Roots) {
@@ -157,18 +158,18 @@ namespace SimpleMesh
             }
             return false;
         }
-       
+
         public Model CalculateBounds()
         {
             foreach(var node in AllNodes().Where(x => x.Geometry != null))
-                node.Geometry.CalculateBounds();
+                node.Geometry!.CalculateBounds();
             return this;
         }
-        
+
         public Model CalculateNormals(bool overwrite = false)
         {
             foreach(var n in AllNodes().Where(x => x.Geometry != null))
-                n.Geometry.CalculateNormals(overwrite);
+                n.Geometry!.CalculateNormals(overwrite);
             return this;
         }
 
@@ -183,14 +184,14 @@ namespace SimpleMesh
             return this;
         }
 
-        public Model MergeTriangleGroups(Predicate<Material> canMerge = null)
+        public Model MergeTriangleGroups(Predicate<Material>? canMerge = null)
         {
             foreach(var node in AllNodes().Where(x => x.Geometry != null))
-                Passes.MergeTriangleGroups.Apply(canMerge, node.Geometry);
+                Passes.MergeTriangleGroups.Apply(canMerge, node.Geometry!);
             return this;
         }
-        
-        IEnumerable<ModelNode> AllNodes(ModelNode n = null)
+
+        IEnumerable<ModelNode> AllNodes(ModelNode? n = null)
         {
             if (n != null)
             {
@@ -246,6 +247,6 @@ namespace SimpleMesh
                 m.Images = new Dictionary<string, ImageData>(Images);
             return m;
         }
-        
+
     }
 }

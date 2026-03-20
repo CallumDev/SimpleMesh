@@ -38,9 +38,9 @@ static class ColladaLoader
 
         var upAxis = Enum.Parse<UpAxisType>(root.Child("asset")?.Child("up_axis")?.Value ?? "Y_UP", true);
 
-        string copyright = root.Child("asset")?.Child("contributor")?.Child("author")?.Value;
-        string generator = root.Child("asset")?.Child("contributor")?.Child("authoring_tool")?.Value;
-        
+        string? copyright = root.Child("asset")?.Child("contributor")?.Child("author")?.Value;
+        string? generator = root.Child("asset")?.Child("contributor")?.Child("authoring_tool")?.Value;
+
         var defSceneUri = root.Child("scene")?.Child("instance_visual_scene")?.Attribute("url")?.Value;
         if (string.IsNullOrWhiteSpace(defSceneUri))
             throw new ModelLoadException("Could not determine default scene");
@@ -67,7 +67,7 @@ static class ColladaLoader
 
         return mdl;
     }
-    
+
     static ModelNode ProcessNode(UpAxisType up, XElement n, GeometryAccessor geolib)
     {
         var obj = new ModelNode();
@@ -115,14 +115,18 @@ static class ColladaLoader
         return Transform.ToYUp((UpAxis)(int)ax, mat);
     }
 
-    class GeometryAccessor(Model model, ModelLoadContext ctx, UpAxisType up, XElement geolib, MaterialAccessor matlib)
+    class GeometryAccessor(Model model, ModelLoadContext ctx, UpAxisType up, XElement? geolib, MaterialAccessor matlib)
     {
-        private Dictionary<string, Geometry> geometries = new();
-        public Geometry GetGeometry(string id)
+        private Dictionary<string, Geometry?> geometries = new();
+        public Geometry? GetGeometry(string id)
         {
             if (!geometries.TryGetValue(id, out var g))
             {
-                var src = geolib!.IdLookup("geometry", id)!;
+                var src = geolib?.IdLookup("geometry", id);
+                if (src == null)
+                {
+                    throw new ModelLoadException($"COLLADA missing geometry {id}");
+                }
                 g = ParseGeometry(up, src, matlib, ctx);
                 geometries[id] = g;
             }
@@ -131,20 +135,20 @@ static class ColladaLoader
 
         public void Set()
         {
-            model.Geometries = geometries.Values.ToArray();
+            model.Geometries = geometries.Values.Where(x => x != null).ToArray()!;
         }
     }
 
-    class MaterialAccessor(Model model, XElement matlib, XElement fxlib)
+    class MaterialAccessor(Model model, XElement? matlib, XElement? fxlib)
     {
         public Material GetMaterial(string? id)
         {
             if (string.IsNullOrWhiteSpace(id)) id = "DEFAULT";
-            var src = matlib?.IdLookup("material", "id");
+            var src = matlib?.IdLookup("material", id);
             var name = id;
             if (src != null)
                 name = string.IsNullOrWhiteSpace(src.Attribute("name")?.Value) ? id : src.Attribute("name")!.Value;
-            if (!model.Materials.TryGetValue(name, out Material mat))
+            if (!model.Materials.TryGetValue(name, out var mat))
             {
                 mat = ParseMaterial(src, name);
                 model.Materials.Add(name, mat);
@@ -153,7 +157,7 @@ static class ColladaLoader
             return mat;
         }
 
-        Material ParseMaterial(XElement src, string name)
+        Material ParseMaterial(XElement? src, string name)
         {
             var cmat = new Material() { Name = name, DiffuseColor = LinearColor.White };
             if (matlib == null || fxlib == null || src == null) return cmat;
@@ -230,16 +234,15 @@ static class ColladaLoader
 
     static int[] GetPRefs(XElement elem) => ParseHelpers.IntArray(elem.Child("p")!.Value);
 
-    static Geometry ParseGeometry(UpAxisType up, XElement geo,  MaterialAccessor matlib, ModelLoadContext ctx)
+    static Geometry? ParseGeometry(UpAxisType up, XElement geo,  MaterialAccessor matlib, ModelLoadContext ctx)
     {
-        var conv = new Geometry();
-        conv.Name = string.IsNullOrEmpty(geo.Attribute("name")?.Value)
+        var geoName = string.IsNullOrEmpty(geo.Attribute("name")?.Value)
             ? geo.Attribute("id")!.Value
             : geo.Attribute("name")!.Value;
 
         // All supported
-        VertexArrayBuilder vertices = null;
-        
+        VertexArrayBuilder? vertices = null;
+
         var indices = new List<uint>();
         List<TriangleGroup> groups = new List<TriangleGroup>();
 
@@ -276,8 +279,8 @@ static class ColladaLoader
 
         GeometryKind kind = GeometryKind.Triangles;
         bool set = false;
-        
-        
+
+
 
         foreach (var elem in polys)
         {
@@ -340,19 +343,19 @@ static class ColladaLoader
             foreach (var input in inputs)
                 pStride = Math.Max((int)input.Offset, pStride);
             pStride++;
-            GeometrySource sourceXYZ = null;
+            GeometrySource? sourceXYZ = null;
             int offXYZ = int.MinValue;
-            GeometrySource sourceNORMAL = null;
+            GeometrySource? sourceNORMAL = null;
             int offNORMAL = int.MinValue;
-            GeometrySource sourceCOLOR = null;
+            GeometrySource? sourceCOLOR = null;
             int offCOLOR = int.MinValue;
-            GeometrySource sourceUV1 = null;
+            GeometrySource? sourceUV1 = null;
             int offUV1 = int.MinValue;
-            GeometrySource sourceUV2 = null;
+            GeometrySource? sourceUV2 = null;
             int offUV2 = int.MinValue;
             int texCount = 0;
             int startIdx = indices.Count;
-            
+
             VertexAttributes attrs = 0;
             foreach (var input in inputs)
             {
@@ -448,34 +451,34 @@ static class ColladaLoader
                 int idx = i * pStride;
                 if (idx >= pRefs.Length)
                 {
-                    Console.WriteLine();
+                    throw new ModelLoadException("Index out of range in COLLADA geometry");
                 }
-                var pos = Transform.ToYUp((UpAxis)(int)up, sourceXYZ.GetXYZ(pRefs[idx + offXYZ]));
-                var normal = offNORMAL == int.MinValue
+                var pos = Transform.ToYUp((UpAxis)(int)up, sourceXYZ!.GetXYZ(pRefs[idx + offXYZ]));
+                var normal = sourceNORMAL == null
                     ? Vector3.Zero
                     : Transform.ToYUp((UpAxis)(int)up, sourceNORMAL.GetXYZ(pRefs[idx + offNORMAL]));
-                var color = offCOLOR == int.MinValue ? LinearColor.White : sourceCOLOR.GetColor(pRefs[idx + offCOLOR]);
-                var uv1 = offUV1 == int.MinValue ? Vector2.Zero : sourceUV1.GetUV(pRefs[idx + offUV1]);
-                var uv2 = offUV2 == int.MinValue ? Vector2.Zero : sourceUV2.GetUV(pRefs[idx + offUV2]);
-                var vert = new Vertex(pos, normal, color, Vector4.Zero, uv1, uv2, Vector2.Zero, Vector2.Zero, 
+                var color = sourceCOLOR?.GetColor(pRefs[idx + offCOLOR]) ?? LinearColor.White;
+                var uv1 = sourceUV1?.GetUV(pRefs[idx + offUV1]) ?? Vector2.Zero;
+                var uv2 = sourceUV2?.GetUV(pRefs[idx + offUV2]) ?? Vector2.Zero;
+                var vert = new Vertex(pos, normal, color, Vector4.Zero, uv1, uv2, Vector2.Zero, Vector2.Zero,
                     default,
                     default);
                 indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
             }
 
-            groups.Add(new TriangleGroup()
+            groups.Add(new TriangleGroup(material)
             {
                 StartIndex = startIdx,
                 BaseVertex = vertices.BaseVertex,
                 IndexCount = indices.Count - startIdx,
-                Material = material
             });
             vertices.Chunk();
         }
 
+        var conv = new Geometry(vertices?.Finish() ?? new VertexArray(0, 0),
+            Indices.FromBuffer(indices.ToArray()));
+        conv.Name = geoName;
         conv.Kind = kind;
-        conv.Vertices = vertices?.Finish();
-        conv.Indices = Indices.FromBuffer(indices.ToArray());
         conv.Groups = groups.ToArray();
         return conv;
     }
@@ -493,7 +496,10 @@ static class ColladaLoader
         {
             Id = src.Attribute("id")!.Value!;
             var acc = src.Child("technique_common")?.Child("accessor");
-            array = arrays[CheckURI(acc.Attribute("source")?.Value)];
+            if (acc == null)
+                throw new ModelLoadException($"{src} missing technique_common->accessor");
+            array = arrays[CheckURI(acc.Attribute("source")?.Value ??
+                                    throw new ModelLoadException($"{src} missing technique_common->accessor->source"))];
             stride = acc.IntAttribute("stride", 1);
             offset = acc.IntAttribute("offset");
             Count = acc.IntAttribute("count");
@@ -507,7 +513,7 @@ static class ColladaLoader
             else if (stride == 3)
                 return LinearColor.FromSrgb(array[i], array[i + 1], array[i + 2], 1);
             else
-                throw new Exception("Color Unhandled stride " + stride);
+                throw new ModelLoadException("Collada Color Unhandled stride " + stride);
         }
 
         public Vector3 GetXYZ(int index)
