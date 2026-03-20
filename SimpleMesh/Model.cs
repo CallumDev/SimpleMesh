@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -244,10 +243,8 @@ namespace SimpleMesh
             m.Materials = mats;
             m.Geometries = Geometries.Select(x => x.Clone(m)).ToArray();
             m.Roots = Roots.Select(x => x.Clone(m, this)).ToArray();
-            if(Animations != null)
-                m.Animations = Animations.Select(x => x.Clone()).ToArray();
-            if (Images != null)
-                m.Images = new Dictionary<string, ImageData>(Images);
+            m.Animations = Animations.Select(x => x.Clone()).ToArray();
+            m.Images = new Dictionary<string, ImageData>(Images);
             return m;
         }
 
