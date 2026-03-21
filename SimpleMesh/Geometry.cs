@@ -114,26 +114,20 @@ namespace SimpleMesh
                 return;
             var unwelded = new UnweldedTriangles(this);
             TangentGeneration.GenerateMikkTSpace(unwelded);
-
-            List<uint> indexArray = new();
-            int startIndex = 0;
-            var vb = new VertexArrayBuilder(Vertices.Descriptor.Attributes | VertexAttributes.Tangent);
-
+            var vb = new GeometryBuilder(Vertices.Descriptor.Attributes | VertexAttributes.Tangent);
             for (int i = 0; i < Groups.Length; i++)
             {
                 for (int j = 0; j < unwelded.Groups[i].VertexCount; j++)
                 {
                     var v = unwelded.GetVertex(j + unwelded.Groups[i].StartVertex);
-                    var idx = vb.Add(ref v) - vb.BaseVertex;
-                    indexArray.Add((uint)idx);
+                    vb.Add(ref v);
                 }
-                Groups[i].StartIndex = startIndex;
-                Groups[i].IndexCount = indexArray.Count - startIndex;
-                Groups[i].BaseVertex = vb.BaseVertex;
-                vb.Chunk();
+                vb.AddGroup(Groups[i].Material);
             }
-            Indices = Indices.FromBuffer(indexArray.ToArray());
-            Vertices = vb.Finish();
+
+            var welded = vb.Finish();
+            Indices = welded.Indices;
+            Vertices = welded.Vertices;
         }
 
         public void CalculateNormals(bool overwrite = false)

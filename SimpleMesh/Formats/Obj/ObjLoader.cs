@@ -27,9 +27,7 @@ namespace SimpleMesh.Formats.Obj
 
             rootNode.Name = "default";
             ModelNode currentNode = rootNode;
-            VertexArrayBuilder currentVertex = new VertexArrayBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
-            List<uint> currentIndices = new List<uint>();
-            List<TriangleGroup> currentGroups = new List<TriangleGroup>();
+            GeometryBuilder currentGeometry = new GeometryBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
             VertexAttributes attributes = VertexAttributes.Position;
             string? currentMaterial = null;
             int lastIndex = 0;
@@ -69,26 +67,10 @@ namespace SimpleMesh.Formats.Obj
 
             bool isL = false, isF = false;
 
-            void AppendTriangleGroup()
-            {
-                if (lastIndex != currentIndices.Count)
-                {
-                    var tg = new TriangleGroup(GetMaterial(currentMaterial ?? "default")) {
-                        BaseVertex = currentVertex.BaseVertex,
-                        IndexCount = (currentIndices.Count - lastIndex),
-                        StartIndex = lastIndex
-                    };
-                    currentGroups.Add(tg);
-                    lastIndex = currentIndices.Count;
-                    currentVertex.Chunk();
-                }
-            }
-
             void SetNodeGeometry()
             {
-                currentNode.Geometry = new Geometry(currentVertex.Finish(), Indices.FromBuffer(currentIndices.ToArray()));
+                currentNode.Geometry = currentGeometry.Finish();
                 currentNode.Geometry.Vertices.ChangeAttributes(attributes);
-                currentNode.Geometry.Groups = currentGroups.ToArray();
                 currentNode.Geometry.Kind = isL ? GeometryKind.Lines : GeometryKind.Triangles;
                 geometries.Add(currentNode.Geometry);
             }
@@ -184,7 +166,7 @@ namespace SimpleMesh.Formats.Obj
                             attributes |= VertexAttributes.Texture1;
                             v.Texture1 = texcoords[ov.TexCoord];
                         }
-                        currentIndices.Add((uint)(currentVertex.Add(ref v) - currentVertex.BaseVertex));
+                        currentGeometry.Add(ref v);
                     }
                 }
                 else if (IsParam(ln, 'f') && GetParam(ln, out param))
@@ -232,30 +214,20 @@ namespace SimpleMesh.Formats.Obj
                             attributes |= VertexAttributes.Texture1;
                             v.Texture1 = texcoords[ov.TexCoord];
                         }
-                        currentIndices.Add((uint)(currentVertex.Add(ref v) - currentVertex.BaseVertex));
+                        currentGeometry.Add(ref v);
                     }
                 }
                 else if (IsParam(ln, 'o') && GetParam(ln, out var objname))
                 {
-                    if (currentIndices.Count == 0 && (currentNode == rootNode))
+                    if (currentGeometry.IndexCount == 0 && (currentNode == rootNode))
                     {
                         rootNode.Name = objname.ToString();
                     }
                     else
                     {
-                        if (currentIndices.Count != 0)
+                        if (currentGeometry.IndexCount != 0)
                         {
-                            if (lastIndex != currentIndices.Count)
-                            {
-                                var tg = new TriangleGroup(GetMaterial(currentMaterial ?? "default"))
-                                {
-                                    BaseVertex = currentVertex.BaseVertex,
-                                    IndexCount = (currentIndices.Count - lastIndex),
-                                    StartIndex = lastIndex,
-                                };
-                                currentGroups.Add(tg);
-                            }
-
+                            currentGeometry.AddGroup(GetMaterial(currentMaterial ?? "default"));
                             SetNodeGeometry();
                         }
                         if (currentNode == rootNode)
@@ -268,20 +240,17 @@ namespace SimpleMesh.Formats.Obj
                             currentNode = new ModelNode() { Name = objname.ToString() };
                         }
                         isL = isF = false;
-                        currentVertex = new VertexArrayBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
-                        currentIndices = new List<uint>();
-                        currentGroups = new List<TriangleGroup>();
+                        currentGeometry = new GeometryBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
                         attributes = VertexAttributes.Position;
-                        lastIndex = 0;
                     }
                 }
                 else if (IsParam(ln, 'g'))
                 {
-                    AppendTriangleGroup();
+                    currentGeometry.AddGroup(GetMaterial(currentMaterial ?? "default"));
                 }
                 else if (StartsWithOrdinal(ln, "usemtl") && GetParam(ln, out param))
                 {
-                    AppendTriangleGroup();
+                    currentGeometry.AddGroup(GetMaterial(currentMaterial ?? "default"));
                     currentMaterial = param.ToString();
                 }
                 else if (StartsWithOrdinal(ln, "mtllib") && GetParam(ln, out param))
@@ -305,9 +274,9 @@ namespace SimpleMesh.Formats.Obj
                 lineNo++;
             }
 
-            AppendTriangleGroup();
+            currentGeometry.AddGroup(GetMaterial(currentMaterial ?? "default"));
 
-            if (currentIndices.Count > 0)
+            if (currentGeometry.IndexCount > 0)
             {
                 SetNodeGeometry();
             }

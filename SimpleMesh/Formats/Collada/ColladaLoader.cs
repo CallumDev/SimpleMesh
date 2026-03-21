@@ -241,7 +241,7 @@ static class ColladaLoader
             : geo.Attribute("name")!.Value;
 
         // All supported
-        VertexArrayBuilder? vertices = null;
+        GeometryBuilder? vertices = null;
 
         var indices = new List<uint>();
         List<TriangleGroup> groups = new List<TriangleGroup>();
@@ -437,7 +437,7 @@ static class ColladaLoader
                 }
             }
 
-            vertices ??= new VertexArrayBuilder(attrs);
+            vertices ??= new GeometryBuilder(attrs);
 
             if (attrs != vertices.Attributes)
             {
@@ -463,20 +463,13 @@ static class ColladaLoader
                 var vert = new Vertex(pos, normal, color, Vector4.Zero, uv1, uv2, Vector2.Zero, Vector2.Zero,
                     default,
                     default);
-                indices.Add((uint)(vertices.Add(ref vert) - vertices.BaseVertex));
+                vertices.Add(ref vert);
             }
 
-            groups.Add(new TriangleGroup(material)
-            {
-                StartIndex = startIdx,
-                BaseVertex = vertices.BaseVertex,
-                IndexCount = indices.Count - startIdx,
-            });
-            vertices.Chunk();
+            vertices.AddGroup(material);
         }
 
-        var conv = new Geometry(vertices?.Finish() ?? new VertexArray(0, 0),
-            Indices.FromBuffer(indices.ToArray()));
+        Geometry conv = vertices?.Finish() ?? new Geometry(new VertexArray(0, 0), Indices.FromBuffer([]));
         conv.Name = geoName;
         conv.Kind = kind;
         conv.Groups = groups.ToArray();

@@ -78,7 +78,7 @@ namespace SimpleMesh.Formats.GLTF
                 }
             }
 
-            VertexArrayBuilder vertexArray = new VertexArrayBuilder(attrs);
+            GeometryBuilder geometry = new GeometryBuilder(attrs);
 
             int startMode = -1;
             foreach (var prim in primArray.EnumerateArray())
@@ -199,8 +199,7 @@ namespace SimpleMesh.Formats.GLTF
                             v.JointIndices = accessors[jointIndex].GetUShort4((int)index);
                             v.JointWeights = accessors[weightIndex].GetVector4((int)index);
                         }
-                        int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
-                        indexArray.Add((uint) idx);
+                        geometry.Add(ref v);
                     }
                 }
                 else
@@ -242,30 +241,20 @@ namespace SimpleMesh.Formats.GLTF
                             v.JointIndices = accessors[jointIndex].GetUShort4(index);
                             v.JointWeights = accessors[weightIndex].GetVector4(index);
                         }
-                        int idx = vertexArray.Add(ref v) - vertexArray.BaseVertex;
-                        indexArray.Add((uint) idx);
                     }
                 }
 
-                tg.Add(new TriangleGroup(prim.TryGetProperty("material", out var matProp)
-                    ? materials[matProp.GetInt32()] : materials[0])
-                {
-                    BaseVertex = vertexArray.BaseVertex,
-                    IndexCount = indexArray.Count - startIndex,
-                    StartIndex = startIndex,
-                });
-                vertexArray.Chunk();
-                startIndex = indexArray.Count;
+                geometry.AddGroup(prim.TryGetProperty("material", out var matProp)
+                    ? materials[matProp.GetInt32()] : materials[0]);
             }
 
-            var g = new Geometry(vertexArray.Finish(), Indices.FromBuffer(indexArray.ToArray()));
+            var g = geometry.Finish();
             g.Kind = startMode switch
             {
                 4 => GeometryKind.Triangles,
                 1 => GeometryKind.Lines,
                 _ => throw new Exception(GError("Unsupported primitive mode " + startMode))
             };
-            g.Vertices = vertexArray.Finish();
             g.Groups = tg.ToArray();
 
             return g;
