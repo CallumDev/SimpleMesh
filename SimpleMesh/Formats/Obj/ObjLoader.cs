@@ -27,8 +27,8 @@ namespace SimpleMesh.Formats.Obj
 
             rootNode.Name = "default";
             ModelNode currentNode = rootNode;
-            GeometryBuilder currentGeometry = new GeometryBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
-            VertexAttributes attributes = VertexAttributes.Position;
+            GeometryBuilder currentGeometry = new GeometryBuilder(VertexAttributes.Normal | VertexAttributes.Texture1);
+            VertexAttributes attributes = VertexAttributes.None;
             string? currentMaterial = null;
             int lastIndex = 0;
 
@@ -240,8 +240,8 @@ namespace SimpleMesh.Formats.Obj
                             currentNode = new ModelNode() { Name = objname.ToString() };
                         }
                         isL = isF = false;
-                        currentGeometry = new GeometryBuilder(VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1);
-                        attributes = VertexAttributes.Position;
+                        currentGeometry = new GeometryBuilder(VertexAttributes.Normal | VertexAttributes.Texture1);
+                        attributes = VertexAttributes.None;
                     }
                 }
                 else if (IsParam(ln, 'g'))

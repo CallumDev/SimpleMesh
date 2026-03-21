@@ -52,15 +52,21 @@ public static class TangentGeneration
 
         public unsafe void SetTSpaceBasic(float* fvTangent, float fSign, int iFace, int iVert)
         {
-            var tangent = new Vector4(fvTangent[0], fvTangent[1], fvTangent[2], fSign);
+            var tangent = new Vector4(fvTangent[0], fvTangent[1], fvTangent[2], fSign * -1);
             G.SetTangent(tangent, iFace, iVert);
         }
     }
-    
+
     public static void GenerateMikkTSpace(ITangentGeometry geometry)
     {
-        var context = new SMikkTSpaceContext();
-        context.Interface = new MikkInterfaceImpl(geometry);
-        MikkTSpace.genTangSpaceDefault(context);
+        /*var context = new MikkTSpace.SMikkTSpaceContext();
+        context.m_getNumFaces = geometry.GetNumFaces;
+        context.m_getNumVerticesOfFace = geometry.GetNumVerticesOfFace;
+        context.m_getPosition = (f,v) => geometry.GetPosition(f, v);
+        context.m_getNormal = (f, v) => geometry.GetNormal(f, v);
+        context.m_getTexCoord = (f, v) => geometry.GetTexCoord(f, v);
+        context.m_setTSpaceBasic = (tangent, orient, face, vertex) =>
+            geometry.SetTangent(new Vector4(tangent.x, tangent.y, tangent.z, orient * -1), face, vertex);*/
+        MikkTSpace.genTangSpaceDefault(new SMikkTSpaceContext() { Interface = new MikkInterfaceImpl(geometry)});
     }
 }

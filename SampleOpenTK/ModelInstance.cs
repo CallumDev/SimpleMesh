@@ -92,9 +92,9 @@ public class ModelInstance
     InstanceNode AddNode(ModelNode node, Dictionary<ModelNode, InstanceNode> instances)
     {
         if (Matrix4x4.Decompose(node.Transform, out var scale, out _, out _) &&
-            Math.Abs(scale.X - 1) < 1e-6 &&
-            Math.Abs(scale.Y - 1) < 1e-6 &&
-            Math.Abs(scale.Z - 1) < 1e-6)
+            Math.Abs(scale.X - 1) > 1e-6 &&
+            Math.Abs(scale.Y - 1) > 1e-6 &&
+            Math.Abs(scale.Z - 1) > 1e-6)
         {
             HasScale = true;
         }

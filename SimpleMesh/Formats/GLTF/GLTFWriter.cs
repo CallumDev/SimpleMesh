@@ -105,8 +105,7 @@ internal static class GLTFWriter
     private static int CreateGeometry(string name, Geometry g, GLTFContext ctx)
     {
         var attributes = new List<(string name, int index)>();
-        if (g.Has(VertexAttributes.Position))
-            attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Position, true, BufferTarget.Vertex)));
+        attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Position, true, BufferTarget.Vertex)));
         if (g.Has(VertexAttributes.Normal))
             attributes.Add(("NORMAL", ctx.AddVector3(g.Vertices.Normal, false, BufferTarget.Vertex)));
         if (g.Has(VertexAttributes.Diffuse))

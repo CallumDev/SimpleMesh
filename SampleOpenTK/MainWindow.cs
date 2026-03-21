@@ -236,8 +236,8 @@ namespace SampleOpenTK
             var m = Model.FromFile(filename, warnings)
                 .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
                 .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
-                //.CalculateNormals() // Calculate missing normals
-                //.CalculateTangents(false, true) // Calculate missing tangents
+                .CalculateNormals() // Calculate missing normals
+                .CalculateTangents(false, true) // Calculate missing tangents
                 .CalculateBounds(); //required for viewing purposes
             sw.Stop();
             foreach(var w in warnings)

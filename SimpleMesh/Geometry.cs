@@ -88,7 +88,7 @@ namespace SimpleMesh
                 }
             }
 
-            public int GetNumFaces() => Original.Count / 3;
+            public int GetNumFaces() => Source.Length / 3;
 
             public int GetNumVerticesOfFace(int index) => 3;
 

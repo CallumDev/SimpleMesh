@@ -55,12 +55,15 @@ namespace SimpleMesh
             Attributes = attributes;
             impl = Attributes switch
             {
-                VertexAttributes.Position => new PositionImpl(),
-                VertexAttributes.Position | VertexAttributes.Normal => new PositionNormalImpl(),
-                VertexAttributes.Position | VertexAttributes.Normal | VertexAttributes.Texture1 => new PositionNormalTex1Impl(),
+                VertexAttributes.None => new PositionImpl(),
+                VertexAttributes.Normal => new PositionNormalImpl(),
+                VertexAttributes.Texture1 => new PositionNormalTex1Impl(),
+                VertexAttributes.Normal | VertexAttributes.Texture1 | VertexAttributes.Tangent => new PositionNormalTex1TangentImpl(),
+
                 _ => new FullImpl(Attributes)
             };
         }
+
 
         class PositionImpl() : BuilderImpl<Vector3>(0)
         {
@@ -70,7 +73,7 @@ namespace SimpleMesh
         record struct PositionNormal(Vector3 Position, Vector3 Normal);
 
         class PositionNormalImpl() :
-            BuilderImpl<PositionNormal>(VertexAttributes.Position | VertexAttributes.Normal)
+            BuilderImpl<PositionNormal>(VertexAttributes.Normal)
         {
             protected override PositionNormal FromVertex(ref Vertex vert) =>
                 new(vert.Position, vert.Normal);
@@ -83,6 +86,15 @@ namespace SimpleMesh
         {
             protected override PositionNormalTex1 FromVertex(ref Vertex vert) =>
                 new(vert.Position, vert.Normal, vert.Texture1);
+        }
+
+        record struct PositionNormalTex1Tangent(Vector3 Position, Vector3 Normal, Vector2 Texture1, Vector4 Tangent);
+
+        class PositionNormalTex1TangentImpl():
+            BuilderImpl<PositionNormalTex1Tangent>(VertexAttributes.Normal | VertexAttributes.Texture1 | VertexAttributes.Tangent)
+        {
+            protected override PositionNormalTex1Tangent FromVertex(ref Vertex vert) =>
+                new(vert.Position, vert.Normal, vert.Texture1, vert.Tangent);
         }
 
         class FullImpl(VertexAttributes attributes) : BuilderImpl<Vertex>(attributes)
@@ -102,6 +114,7 @@ namespace SimpleMesh
             Dictionary<T, int> indices = new Dictionary<T, int>();
             private VertexArray array;
             private int vertexCount = 0;
+            private List<T> all = [];
 
             public int BaseVertex { get; private set; }
 
@@ -121,6 +134,7 @@ namespace SimpleMesh
                 var v = FromVertex(ref vert);
                 if (!indices.TryGetValue(v, out int idx))
                 {
+                    all.Add(v);
                     if (vertexCount + 1 >= array.Count) {
                         array.Resize(array.Count * 2);
                     }

@@ -36,7 +36,7 @@ namespace SimpleMesh.Formats.GLTF
             if (!element.TryGetProperty("primitives", out var primArray))
                 throw new ModelLoadException(GError("mesh does not contain primitives"));
             int startIndex = 0;
-            var attrs = VertexAttributes.Position;
+            var attrs = VertexAttributes.None;
 
             // Calculate attributes
             foreach (var prim in primArray.EnumerateArray())
