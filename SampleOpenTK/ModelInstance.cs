@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Xml;
 using SimpleMesh;
 
 namespace SampleOpenTK;
@@ -13,6 +12,9 @@ public class ModelInstance
     public AnimationHandler Animator = new();
     public InstanceNode[] Roots;
     public SkinInstance[] Skins;
+
+    // Scale component
+    public bool HasScale = false;
 
     public ModelInstance(Model model)
     {
@@ -89,6 +91,13 @@ public class ModelInstance
 
     InstanceNode AddNode(ModelNode node, Dictionary<ModelNode, InstanceNode> instances)
     {
+        if (Matrix4x4.Decompose(node.Transform, out var scale, out _, out _) &&
+            Math.Abs(scale.X - 1) < 1e-6 &&
+            Math.Abs(scale.Y - 1) < 1e-6 &&
+            Math.Abs(scale.Z - 1) < 1e-6)
+        {
+            HasScale = true;
+        }
         var n = new InstanceNode(node);
         instances[node] = n;
         foreach(var c in node.Children)

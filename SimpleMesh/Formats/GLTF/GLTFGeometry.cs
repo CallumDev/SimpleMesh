@@ -36,8 +36,6 @@ namespace SimpleMesh.Formats.GLTF
             if (!element.TryGetProperty("primitives", out var primArray))
                 throw new ModelLoadException(GError("mesh does not contain primitives"));
             int startIndex = 0;
-            List<uint> indexArray = new List<uint>();
-            List<TriangleGroup> tg = new List<TriangleGroup>();
             var attrs = VertexAttributes.Position;
 
             // Calculate attributes
@@ -255,7 +253,6 @@ namespace SimpleMesh.Formats.GLTF
                 1 => GeometryKind.Lines,
                 _ => throw new Exception(GError("Unsupported primitive mode " + startMode))
             };
-            g.Groups = tg.ToArray();
 
             return g;
         }

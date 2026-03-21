@@ -74,16 +74,16 @@ unsafe static class MikkTSpace
             get
             {
                 if (index == 0) return _0;
-                if (index == 1) return _1;
-                if (index == 2) return _2;
-                throw new IndexOutOfRangeException();
+                else if (index == 1) return _1;
+                else if (index == 2) return _2;
+                else throw new IndexOutOfRangeException();
             }
             set
             {
                 if (index == 0) _0 = value;
-                if (index == 1) _1 = value;
-                if (index == 2) _2 = value;
-                throw new IndexOutOfRangeException();
+                else if (index == 1) _1 = value;
+                else if (index == 2) _2 = value;
+                else throw new IndexOutOfRangeException();
             }
         }
     }
@@ -180,7 +180,7 @@ unsafe static class MikkTSpace
         public bool bOrientPreservering;
     }
 
-// 
+//
     private const int MARK_DEGENERATE = 1;
     private const int QUAD_ONE_DEGEN_TRI = 2;
     private const int GROUP_WITH_ANY = 4;

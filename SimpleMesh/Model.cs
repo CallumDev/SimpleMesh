@@ -22,13 +22,15 @@ namespace SimpleMesh
         public string? Copyright;
         public string? Generator;
 
-        public static Model FromStream(Stream stream, IExternalResources? resources = null, List<string>? warnings = null)
+        public static Model FromStream(Stream stream, IExternalResources? resources = null,
+            List<string>? warnings = null)
         {
             return Autodetect.Load(stream, new ModelLoadContext(warnings ?? [])
             {
                 ExternalResources = resources ?? new DisallowedResources()
             });
         }
+
         public static Model FromFile(string filename, List<string>? warnings = null)
         {
             using var stream = File.OpenRead(filename);
@@ -44,7 +46,8 @@ namespace SimpleMesh
             }
 
             int withGeometry = -1;
-            for (int i = 0; i < Roots.Length; i++) {
+            for (int i = 0; i < Roots.Length; i++)
+            {
                 if (HasGeometry(Roots[i]))
                 {
                     if (withGeometry == -1) withGeometry = i;
@@ -55,99 +58,117 @@ namespace SimpleMesh
                     }
                 }
             }
-            if (withGeometry != -1) {
-                Roots = new ModelNode[] {Roots[withGeometry]};
+
+            if (withGeometry != -1)
+            {
+                Roots = new ModelNode[] { Roots[withGeometry] };
                 success = true;
             }
-            else {
+            else
+            {
                 success = false;
             }
+
             return this;
         }
 
-        public Model ApplyScale()
+        public Model ApplyScale(out bool success)
         {
-            foreach (var m in Roots) {
-                ApplyScale(m, Vector3.One);
+            success = true;
+            foreach (var m in Roots)
+            {
+                ApplyScale(m, 1, ref success);
             }
             return this;
         }
 
-        static bool AlmostOne(Vector3 x)
+        static void ApplyScale(ModelNode node, float parentScale, ref bool success)
         {
-            const float TOLERANCE = 0.000001f;
-            return Math.Abs(x.X - 1) < TOLERANCE &&
-                   Math.Abs(x.Y - 1) < TOLERANCE &&
-                   Math.Abs(x.Z - 1) < TOLERANCE;
-        }
-
-        static void ApplyScale(ModelNode node, Vector3 parentScale)
-        {
-            Matrix4x4.Decompose(node.Transform, out var scale, out var rotate, out var translate);
-            var myScale = scale * parentScale;
-            if (!AlmostOne(myScale))
+            if (!Matrix4x4.Decompose(node.Transform, out var scaleVector, out var rotate, out var translate))
             {
-                if (node.Geometry != null)
+                success = false;
+                return;
+            }
+
+            float myScale = scaleVector.X;
+            if (Math.Abs(scaleVector.X - scaleVector.Y) > 1e-6f ||
+                Math.Abs(scaleVector.Y - scaleVector.Z) > 1e-6f)
+            {
+                success = false;
+                return;
+            }
+
+            myScale *= parentScale;
+
+            if (Math.Abs(myScale - 1) > 1e-6f && node.Geometry != null)
+            {
+                for (int i = 0; i < node.Geometry.Vertices.Count; i++)
                 {
+                    node.Geometry.Vertices.Position[i] *= myScale;
+                }
+
+                if (node.Geometry.Has(VertexAttributes.Normal))
+                {
+                    var invScale = 1f / myScale;
                     for (int i = 0; i < node.Geometry.Vertices.Count; i++)
                     {
-                        node.Geometry.Vertices.Position[i] *= myScale;
-
-                    }
-                    if (node.Geometry.Has(VertexAttributes.Normal))
-                    {
-                        for (int i = 0; i < node.Geometry.Vertices.Count; i++)
-                        {
-                            node.Geometry.Vertices.Normal[i] =
-                                Vector3.Normalize(myScale * node.Geometry.Vertices.Normal[i]);
-                        }
+                        node.Geometry.Vertices.Normal[i] =
+                            Vector3.Normalize(node.Geometry.Vertices.Normal[i] * invScale);
                     }
                 }
-                node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
-                                 Matrix4x4.CreateTranslation(translate * parentScale);
+
+                node.Geometry.CalculateBounds();
             }
-            else if (!AlmostOne(parentScale))
+
+            node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
+                             Matrix4x4.CreateTranslation(translate * parentScale);
+
+            foreach (var child in node.Children)
             {
-                node.Transform = Matrix4x4.CreateFromQuaternion(rotate) *
-                                 Matrix4x4.CreateTranslation(translate * parentScale);
-            }
-            foreach (var child in node.Children) {
-                ApplyScale(child, myScale);
+                ApplyScale(child, myScale, ref success);
             }
         }
 
 
         public Model ApplyRootTransforms(bool translate)
         {
-            foreach (var m in Roots) {
+            foreach (var m in Roots)
+            {
                 if (m.Transform != Matrix4x4.Identity)
                 {
                     var tr = m.Transform;
-                    if (!translate) {
+                    if (!translate)
+                    {
                         Matrix4x4.Decompose(tr, out _, out Quaternion rotq, out _);
                         tr = Matrix4x4.CreateFromQuaternion(rotq);
                     }
+
                     if (m.Geometry != null)
                     {
                         for (int i = 0; i < m.Geometry.Vertices.Count; i++)
                         {
                             m.Geometry.Vertices.Position[i] = Vector3.Transform(m.Geometry.Vertices.Position[i], tr);
                         }
+
                         if (m.Geometry.Has(VertexAttributes.Normal))
                         {
                             for (int i = 0; i < m.Geometry.Vertices.Count; i++)
                             {
-                                m.Geometry.Vertices.Normal[i] = Vector3.TransformNormal(m.Geometry.Vertices.Normal[i], tr);
+                                m.Geometry.Vertices.Normal[i] =
+                                    Vector3.TransformNormal(m.Geometry.Vertices.Normal[i], tr);
                             }
                         }
                     }
+
                     foreach (var child in m.Children)
                     {
                         child.Transform = child.Transform * tr;
                     }
+
                     m.Transform = Matrix4x4.Identity;
                 }
             }
+
             return this;
         }
 
@@ -158,19 +179,20 @@ namespace SimpleMesh
             {
                 if (HasGeometry(child)) return true;
             }
+
             return false;
         }
 
         public Model CalculateBounds()
         {
-            foreach(var node in AllNodes().Where(x => x.Geometry != null))
+            foreach (var node in AllNodes().Where(x => x.Geometry != null))
                 node.Geometry!.CalculateBounds();
             return this;
         }
 
         public Model CalculateNormals(bool overwrite = false)
         {
-            foreach(var n in AllNodes().Where(x => x.Geometry != null))
+            foreach (var n in AllNodes().Where(x => x.Geometry != null))
                 n.Geometry!.CalculateNormals(overwrite);
             return this;
         }
@@ -183,12 +205,13 @@ namespace SimpleMesh
                     continue; //Don't calculate tangents on non-normal mapped model
                 g.CalculateTangents(overwrite);
             }
+
             return this;
         }
 
         public Model MergeTriangleGroups(Predicate<Material>? canMerge = null)
         {
-            foreach(var node in AllNodes().Where(x => x.Geometry != null))
+            foreach (var node in AllNodes().Where(x => x.Geometry != null))
                 Passes.MergeTriangleGroups.Apply(canMerge, node.Geometry!);
             return this;
         }
@@ -230,7 +253,7 @@ namespace SimpleMesh
                     ColladaWriter.Write(this, stream);
                     break;
                 default:
-                    throw new ArgumentException( null, nameof(format));
+                    throw new ArgumentException(null, nameof(format));
             }
         }
 
@@ -247,6 +270,5 @@ namespace SimpleMesh
             m.Images = new Dictionary<string, ImageData>(Images);
             return m;
         }
-
     }
 }

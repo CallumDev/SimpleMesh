@@ -29,6 +29,7 @@ namespace SampleOpenTK
         private Button saveGltfButton;
         private Button saveColladaButton;
         private Button pbrButton;
+        private Button removeScale;
 
         private Dictionary<string, int> textures = new Dictionary<string, int>();
         private int nullTexture;
@@ -91,6 +92,13 @@ namespace SampleOpenTK
                 pbrButton!.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
             });
 
+            removeScale = new Button("Remove Scale", 350, 5, () =>
+            {
+                model = model!.ApplyScale(out var success);
+                Console.WriteLine($"Remove Scale result = {success}");
+                UseModel(model!);
+            });
+
             buttons = [openButton];
         }
 
@@ -146,29 +154,8 @@ namespace SampleOpenTK
             model!.SaveTo(stream, format);
         }
 
-        void LoadModel(string filename)
+        void UseModel(Model m)
         {
-            var sw = Stopwatch.StartNew();
-            List<string> warnings = [];
-            var m = Model.FromFile(filename, warnings)
-                .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
-                .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
-                .CalculateNormals() // Calculate missing normals
-                .CalculateTangents(false, true) // Calculate missing tangents
-                .CalculateBounds(); //required for viewing purposes
-            sw.Stop();
-            foreach(var w in warnings)
-                Console.WriteLine(w);
-            openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";
-            if (m.Generator != null)
-            {
-                openfile += $"\nGenerator: {m.Generator}";
-            }
-
-            if (m.Copyright != null)
-            {
-                openfile += $"\nCopyright: {m.Copyright}";
-            }
             foreach (var tex in textures)
                 GL.DeleteTexture(tex.Value);
             textures = new(StringComparer.OrdinalIgnoreCase);
@@ -237,6 +224,35 @@ namespace SampleOpenTK
 
             model = m;
             instance = new ModelInstance(m);
+
+            if(instance.HasScale)
+                buttons.Add(removeScale);
+        }
+
+        void LoadModel(string filename)
+        {
+            var sw = Stopwatch.StartNew();
+            List<string> warnings = [];
+            var m = Model.FromFile(filename, warnings)
+                .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
+                .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
+                //.CalculateNormals() // Calculate missing normals
+                //.CalculateTangents(false, true) // Calculate missing tangents
+                .CalculateBounds(); //required for viewing purposes
+            sw.Stop();
+            foreach(var w in warnings)
+                Console.WriteLine(w);
+            openfile = $"{filename} ({sw.Elapsed.TotalMilliseconds:F2}ms)";
+            if (m.Generator != null)
+            {
+                openfile += $"\nGenerator: {m.Generator}";
+            }
+
+            if (m.Copyright != null)
+            {
+                openfile += $"\nCopyright: {m.Copyright}";
+            }
+            UseModel(m);
         }
 
 
@@ -383,7 +399,7 @@ namespace SampleOpenTK
                 //generate camera matrix based off model dimensions
                 var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60),
                     (float)Size.X / Size.Y,
-                    0.02f, 10000);
+                    0.02f, Math.Min(10000, modelRadius * 60));
                 var campos = new Vector3(0, 0, (-modelRadius * 4) * zoom);
                 var view = Matrix4.LookAt(campos, Vector3.Zero, Vector3.UnitY);
                 var vp = view * projection;

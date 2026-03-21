@@ -45,6 +45,7 @@ namespace SimpleMesh
         public Geometry Finish()
         {
             var geo = new Geometry(impl.Finish(), Indices.FromBuffer(indices.ToArray()));
+            geo.Groups = groups.ToArray();
             finished = true;
             return geo;
         }
@@ -112,7 +113,7 @@ namespace SimpleMesh
             public void Chunk()
             {
                 indices = new Dictionary<T, int>();
-                BaseVertex = array.Count;
+                BaseVertex = vertexCount;
             }
 
             public int Add(ref Vertex vert)

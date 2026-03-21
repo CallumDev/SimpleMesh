@@ -83,7 +83,7 @@ namespace SimpleMesh
                     for (int j = 0; j < g.Groups[i].IndexCount; j++)
                     {
                         var idx = (int)(g.Indices[g.Groups[i].StartIndex + j] + g.Groups[i].BaseVertex);
-                        Source[vtx] = idx;
+                        Source[vtx++] = idx;
                     }
                 }
             }
