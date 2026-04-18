@@ -195,7 +195,7 @@ namespace SimpleMesh.Formats.GLTF
                 foreach (var m in materialsElement.EnumerateArray())
                 {
                     if (!m.TryGetStringProperty("name", out var matname))
-                        throw new ModelLoadException("material missing name property");
+                        matname = $"material{k}";
                     var mat = new Material {Name = matname};
                     mat.DiffuseColor = LinearColor.White; // Default colour
                     if (m.TryGetProperty("emissiveFactor", out var emissiveCol))
