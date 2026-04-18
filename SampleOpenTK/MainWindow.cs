@@ -30,6 +30,7 @@ namespace SampleOpenTK
         private Button saveColladaButton;
         private Button pbrButton;
         private Button removeScale;
+        private Button culling;
 
         private Dictionary<string, int> textures = new Dictionary<string, int>();
         private int nullTexture;
@@ -47,6 +48,7 @@ namespace SampleOpenTK
 
         private bool pbrEnabled = true;
         private bool hasPbr = false;
+        private bool backfaceCull = true;
 
         public MainWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
             gameWindowSettings, nativeWindowSettings)
@@ -92,7 +94,13 @@ namespace SampleOpenTK
                 pbrButton!.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
             });
 
-            removeScale = new Button("Remove Scale", 350, 5, () =>
+            culling = new Button("Culling Enabled", 350, 5, () =>
+            {
+                backfaceCull = !backfaceCull;
+                culling!.Text = backfaceCull ? "Culling Enabled" : "Culling Disabled";
+            });
+
+            removeScale = new Button("Remove Scale", 385, 5, () =>
             {
                 model = model!.ApplyScale(out var success);
                 Console.WriteLine($"Remove Scale result = {success}");
@@ -193,19 +201,16 @@ namespace SampleOpenTK
                 v.Create();
 
             hasPbr = pbrEnabled = m.Materials.Any(x => x.Value.MetallicRoughness);
+            buttons = [openButton, saveButton, saveGltfButton, saveColladaButton, culling];
             if (hasPbr)
             {
                 pbrButton.Text = "PBR Enabled";
-                buttons = new List<Button>(new[]
-                    { openButton, saveButton, saveGltfButton, saveColladaButton, pbrButton });
+                buttons.Add(pbrButton);
             }
-            else
-                buttons = new List<Button>(new[] { openButton, saveButton, saveColladaButton, saveGltfButton });
-
             int y = 5;
             if (m.Animations != null)
             {
-                foreach (var anim in m.Animations)
+                foreach (var anim in m.Animations.Take(16))
                 {
                     buttons.Add(new Button(anim.Name ?? "ANIMATION", 200, y,
                         () => { instance!.Animator.Instances.Add(new AnimationInstance(anim)); }));
@@ -370,7 +375,10 @@ namespace SampleOpenTK
             GL.Viewport(0, 0, sz.X, sz.Y);
             GL.ClearColor(Color4.Blue);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-            GL.Enable(EnableCap.CullFace);
+            if(backfaceCull)
+                GL.Enable(EnableCap.CullFace);
+            else
+                GL.Disable(EnableCap.CullFace);
             GL.Enable(EnableCap.DepthTest);
             GL.Disable(EnableCap.Blend);
 

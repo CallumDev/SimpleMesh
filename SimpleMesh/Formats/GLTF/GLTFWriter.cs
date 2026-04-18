@@ -355,7 +355,7 @@ internal static class GLTFWriter
         json.Add("nodes", new JsonArray(ctx.Nodes));
         json.Add("materials", new JsonArray(jsonMats.ToArray()));
         json.Add("meshes", new JsonArray(ctx.Geometries.ToArray()));
-        if (model.Animations != null)
+        if (model.Animations is { Length: >0 })
         {
             var anms = new JsonArray(model.Animations.Select(x => CreateAnimationNode(x, ctx)).ToArray());
             json.Add("animations", anms);
