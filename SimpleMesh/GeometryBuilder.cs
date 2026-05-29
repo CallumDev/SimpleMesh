@@ -7,7 +7,7 @@ namespace SimpleMesh
     /// <summary>
     /// Progressively builds a Geometry class from provided vertices and group data.
     /// </summary>
-    public class GeometryBuilder
+    public partial class GeometryBuilder
     {
         public VertexAttributes Attributes { get; private set; }
         public int IndexCount => indices.Count;
@@ -53,48 +53,13 @@ namespace SimpleMesh
         public GeometryBuilder(VertexAttributes attributes)
         {
             Attributes = attributes;
-            impl = Attributes switch
-            {
-                VertexAttributes.None => new PositionImpl(),
-                VertexAttributes.Normal => new PositionNormalImpl(),
-                VertexAttributes.Texture1 => new PositionNormalTex1Impl(),
-                VertexAttributes.Normal | VertexAttributes.Texture1 | VertexAttributes.Tangent => new PositionNormalTex1TangentImpl(),
-
-                _ => new FullImpl(Attributes)
-            };
+            impl = CreateImpl(attributes);
         }
 
 
         class PositionImpl() : BuilderImpl<Vector3>(0)
         {
             protected override Vector3 FromVertex(ref Vertex vert) => vert.Position;
-        }
-
-        record struct PositionNormal(Vector3 Position, Vector3 Normal);
-
-        class PositionNormalImpl() :
-            BuilderImpl<PositionNormal>(VertexAttributes.Normal)
-        {
-            protected override PositionNormal FromVertex(ref Vertex vert) =>
-                new(vert.Position, vert.Normal);
-        }
-
-        record struct PositionNormalTex1(Vector3 Position, Vector3 Normal, Vector2 Texture1);
-
-        class PositionNormalTex1Impl():
-            BuilderImpl<PositionNormalTex1>(VertexAttributes.Normal | VertexAttributes.Texture1)
-        {
-            protected override PositionNormalTex1 FromVertex(ref Vertex vert) =>
-                new(vert.Position, vert.Normal, vert.Texture1);
-        }
-
-        record struct PositionNormalTex1Tangent(Vector3 Position, Vector3 Normal, Vector2 Texture1, Vector4 Tangent);
-
-        class PositionNormalTex1TangentImpl():
-            BuilderImpl<PositionNormalTex1Tangent>(VertexAttributes.Normal | VertexAttributes.Texture1 | VertexAttributes.Tangent)
-        {
-            protected override PositionNormalTex1Tangent FromVertex(ref Vertex vert) =>
-                new(vert.Position, vert.Normal, vert.Texture1, vert.Tangent);
         }
 
         class FullImpl(VertexAttributes attributes) : BuilderImpl<Vertex>(attributes)
@@ -109,6 +74,7 @@ namespace SimpleMesh
             VertexArray Finish();
             int BaseVertex { get; }
         }
+
         abstract class BuilderImpl<T> : IBuilderImpl where T : notnull
         {
             Dictionary<T, int> indices = new Dictionary<T, int>();
