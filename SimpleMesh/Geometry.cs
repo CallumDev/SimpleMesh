@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using SimpleMesh.Util;
 
 namespace SimpleMesh
 {
@@ -176,8 +177,7 @@ namespace SimpleMesh
             }
         }
 
-
-        internal Geometry Clone(Model model) => new Geometry(Vertices.Clone(), Indices.Clone())
+        internal Geometry Clone(Model model) => new(Vertices.Clone(), Indices.Clone())
         {
             Name = Name,
             Kind = Kind,
@@ -192,5 +192,49 @@ namespace SimpleMesh
         internal bool Has(VertexAttributes attributes) =>
             (Vertices.Descriptor.Attributes & attributes) == attributes;
 
+        public Geometry CreateTransformedCopy(Matrix4x4 transform)
+        {
+            var v = Vertices.Clone();
+            for (int i = 0; i < v.Count; i++)
+            {
+                v.Position[i] = Vector3.Transform(v.Position[i], transform);
+            }
+
+            if (Has(VertexAttributes.Normal) &&
+                Has(VertexAttributes.Tangent))
+            {
+                Matrix4x4.Invert(transform, out var normal);
+                normal = Matrix4x4.Transpose(normal);
+                bool flipHandedness = transform.GetDeterminant() < 0;
+                for (int i = 0; i < v.Count; i++)
+                {
+                    v.Normal[i] = Vector3.Normalize(Vector3.TransformNormal(v.Normal[i], normal));
+                    var tangent = v.Tangent[i];
+                    var txyz = new Vector3(tangent.X, tangent.Y, tangent.Z);
+                    v.Tangent[i] = new Vector4(
+                        Vector3.Normalize(Vector3.TransformNormal(txyz, normal)),
+                        flipHandedness ? -tangent.W : tangent.W);
+                }
+            }
+            else if (Has(VertexAttributes.Normal))
+            {
+                Matrix4x4.Invert(transform, out var normal);
+                normal = Matrix4x4.Transpose(normal);
+                for (int i = 0; i < v.Count; i++)
+                {
+                    v.Normal[i] = Vector3.Normalize(Vector3.TransformNormal(v.Normal[i], normal));
+                }
+            }
+
+            var copy = new Geometry(v, Indices.Clone())
+            {
+                Name = Name,
+                Kind = Kind,
+                Groups = Groups.Select(x => x.Clone()).ToArray(),
+                UserTag = UserTag
+            };
+            copy.CalculateBounds();
+            return copy;
+        }
     }
 }

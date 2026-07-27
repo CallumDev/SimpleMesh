@@ -21,5 +21,7 @@ namespace SimpleMesh
                 IndexCount = IndexCount,
             };
         }
+
+        internal TriangleGroup Clone() => (TriangleGroup)MemberwiseClone();
     }
 }
