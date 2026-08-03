@@ -39,7 +39,7 @@ namespace SimpleMesh.Formats.SMesh
                 {
                     writer.WriteVarUInt32(0);
                 }
-                else if (str == "") 
+                else if (str == "")
                 {
                     writer.WriteVarUInt32(1);
                 }
@@ -71,7 +71,7 @@ namespace SimpleMesh.Formats.SMesh
                 TraverseNodeTree(builder, indices, c);
             }
         }
-        
+
         public static void Write(Model model, Stream stream)
         {
             stream.WriteByte((byte)'S');
@@ -83,7 +83,7 @@ namespace SimpleMesh.Formats.SMesh
             var writer = new BinaryWriter(ms);
 
             Dictionary<ModelNode, int> nodeIndices = new();
-            
+
             var strBuffer = new StringBufferBuilder();
             strBuffer.AddString(model.Copyright);
             strBuffer.AddString(model.Generator);
@@ -108,13 +108,23 @@ namespace SimpleMesh.Formats.SMesh
             {
                 TraverseNodeTree(strBuffer, nodeIndices, n);
             }
+            foreach (var anm in model.Animations)
+            {
+                strBuffer.AddString(anm.Name);
+                foreach(var s in anm.Scales)
+                    strBuffer.AddString(s.Target);
+                foreach(var t in anm.Translations)
+                    strBuffer.AddString(t.Target);
+                foreach(var r in anm.Rotations)
+                    strBuffer.AddString(r.Target);
+            }
             if (model.Images != null) {
                 foreach (var kv in model.Images) {
                     strBuffer.AddString(kv.Key);
                     strBuffer.AddString(kv.Value.MimeType);
                 }
             }
-            
+
             strBuffer.WriteBuffer(writer);
 
             strBuffer.WriteStringPos(writer, model.Copyright);
@@ -210,6 +220,7 @@ namespace SimpleMesh.Formats.SMesh
                     writer.WriteVarUInt32((uint)anim.Rotations.Length);
                     foreach (var rot in anim.Rotations) {
                         strBuffer.WriteStringPos(writer, rot.Target);
+                        writer.Write((byte)rot.Interpolation);
                         writer.WriteVarUInt32((uint)rot.Keyframes.Length);
                         foreach (var kf in rot.Keyframes) {
                             writer.Write(kf.Time);
@@ -218,17 +229,29 @@ namespace SimpleMesh.Formats.SMesh
                             writer.Write(kf.Rotation.Z);
                             writer.Write(kf.Rotation.W);
                         }
+                        if (rot.Tangents != null)
+                        {
+                            writer.WriteVarUInt32((uint)(1 + rot.Tangents.Length));
+                            foreach (var t in rot.Tangents)
+                            {
+                                writer.Write(t.In);
+                                writer.Write(t.Out);
+                            }
+                        }
+                        else
+                        {
+                            writer.WriteVarUInt32(0);
+                        }
                     }
                     writer.WriteVarUInt32((uint)anim.Translations.Length);
-                    foreach (var tr in anim.Translations) {
-                        strBuffer.WriteStringPos(writer, tr.Target);
-                        writer.WriteVarUInt32((uint)tr.Keyframes.Length);
-                        foreach (var kf in tr.Keyframes) {
-                            writer.Write(kf.Time);
-                            writer.Write(kf.Translation.X);
-                            writer.Write(kf.Translation.Y);
-                            writer.Write(kf.Translation.Z);
-                        }
+                    foreach (var tr in anim.Translations)
+                    {
+                        WriteVectorChannel(writer, strBuffer, tr);
+                    }
+                    writer.WriteVarUInt32((uint)anim.Scales.Length);
+                    foreach (var tr in anim.Scales)
+                    {
+                        WriteVectorChannel(writer, strBuffer, tr);
                     }
                 }
             }
@@ -239,6 +262,32 @@ namespace SimpleMesh.Formats.SMesh
 
             ms.Position = 0;
             ms.CopyTo(comp);
+        }
+
+        static void WriteVectorChannel(BinaryWriter writer, StringBufferBuilder strBuffer, VectorChannel tr)
+        {
+            strBuffer.WriteStringPos(writer, tr.Target);
+            writer.Write((byte)tr.Interpolation);
+            writer.WriteVarUInt32((uint)tr.Keyframes.Length);
+            foreach (var kf in tr.Keyframes) {
+                writer.Write(kf.Time);
+                writer.Write(kf.Vector.X);
+                writer.Write(kf.Vector.Y);
+                writer.Write(kf.Vector.Z);
+            }
+            if (tr.Tangents != null)
+            {
+                writer.WriteVarUInt32((uint)(1 + tr.Tangents.Length));
+                foreach (var t in tr.Tangents)
+                {
+                    writer.Write(t.In);
+                    writer.Write(t.Out);
+                }
+            }
+            else
+            {
+                writer.WriteVarUInt32(0);
+            }
         }
 
         static void WriteTexInfo(BinaryWriter writer, StringBufferBuilder strBuffer, TextureInfo? tex)
@@ -310,7 +359,7 @@ namespace SimpleMesh.Formats.SMesh
             if (n.Geometry == null)
             {
                 writer.WriteVarUInt32(0);
-            } 
+            }
             else
             {
                 var idx = Array.IndexOf(geometries, n.Geometry);
@@ -338,7 +387,7 @@ namespace SimpleMesh.Formats.SMesh
                     writer.WriteVarUInt32((uint)idx + 1);
                 }
             }
-            
+
             writer.WriteVarUInt32((uint)n.Children.Count);
             foreach (var child in n.Children)
             {

@@ -97,6 +97,11 @@ namespace SimpleMesh.Util
             return new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
         }
 
+        public static Vector4 ReadVector4(this BinaryReader reader)
+        {
+            return new Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+        }
+
         public static void WriteVarUInt32(this BinaryWriter writer, uint u)
         {
             if (u <= 127)

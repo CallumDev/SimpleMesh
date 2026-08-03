@@ -71,17 +71,21 @@ public class ModelInstance
 
     void Transform(InstanceNode node, Matrix4x4 parent)
     {
-        var (animTranslate, animRotate) = Animator.GetAnimated(node.Node.Name, out var tr, out var rot);
+        var (animTranslate, animRotate, animScale) =
+            Animator.GetAnimated(node.Node.Name, out var tr, out var rot, out var sc);
         Matrix4x4 selfTransform;
-        Matrix4x4.Decompose(node.Node.Transform, out _, out var nodeRotate, out var nodeTranslate);
-        if (animTranslate && !animRotate)
-            selfTransform = Matrix4x4.CreateFromQuaternion(nodeRotate) * Matrix4x4.CreateTranslation(tr);
-        else if (animRotate && !animTranslate)
-            selfTransform = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(nodeTranslate);
-        else if (animTranslate && animRotate)
-            selfTransform = Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(tr);
+        if (animTranslate || animRotate || animScale)
+        {
+            Matrix4x4.Decompose(node.Node.Transform, out var nodeScale, out var nodeRotate, out var nodeTranslate);
+            selfTransform =
+                Matrix4x4.CreateScale(animScale ? sc : nodeScale) *
+                Matrix4x4.CreateFromQuaternion(animRotate ? rot : nodeRotate) *
+                Matrix4x4.CreateTranslation(animTranslate ? tr : nodeTranslate);
+        }
         else
+        {
             selfTransform = node.Node.Transform;
+        }
         node.Transform = selfTransform * parent;
         foreach (var c in node.Children)
         {

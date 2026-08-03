@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -254,16 +255,40 @@ internal static class GLTFWriter
         };
         List<JsonNode> samplers = new List<JsonNode>();
         List<JsonNode> channels = new List<JsonNode>();
+
+        string InterpString(AnimationInterpolation i) => i switch
+        {
+            AnimationInterpolation.CubicSpline => "CUBICSPLINE",
+            AnimationInterpolation.Step => "STEP",
+            _ => "LINEAR"
+        };
+
         foreach (var ch in anm.Rotations)
         {
             var times = ctx.AddFloats(ch.Keyframes.Select(x => x.Time).ToArray());
-            var quats = ctx.AddQuaternions(ch.Keyframes.Select(x => x.Rotation).ToArray());
+
+            Vector4[] values;
+            if (ch.Interpolation == AnimationInterpolation.CubicSpline)
+            {
+                values = new Vector4[ch.Keyframes.Length * 3];
+                for (int i = 0; i < ch.Keyframes.Length; i++)
+                {
+                    values[i * 3] = ch.Tangents![i].In;
+                    values[i * 3 + 1] = Unsafe.BitCast<Quaternion, Vector4>(ch.Keyframes[i].Rotation);
+                    values[i * 3 + 2] = ch.Tangents![i].Out;
+                }
+            }
+            else
+            {
+                values = ch.Keyframes.Select(x => Unsafe.BitCast<Quaternion, Vector4>(x.Rotation)).ToArray();
+            }
+            var quats = ctx.AddVector4s(values);
             var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
             if (mn.Key == null) continue;
             samplers.Add(new JsonObject
             {
                 { "input", times },
-                { "interpolation", "LINEAR" },
+                { "interpolation", InterpString(ch.Interpolation) },
                 { "output", quats },
             });
             channels.Add(new JsonObject
@@ -279,16 +304,32 @@ internal static class GLTFWriter
             });
         }
 
-        foreach (var ch in anm.Translations)
+        void AddVectorChannel(VectorChannel ch, string path, int targetNode)
         {
             var times = ctx.AddFloats(ch.Keyframes.Select(x => x.Time).ToArray());
-            var vecs = ctx.AddVector3(ch.Keyframes.Select(x => x.Translation).ToArray(), true, BufferTarget.Animation);
-            var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
-            if (mn.Key == null) continue;
+
+            Vector3[] values;
+            if (ch.Interpolation == AnimationInterpolation.CubicSpline)
+            {
+                values = new Vector3[ch.Keyframes.Length * 3];
+                for (int i = 0; i < ch.Keyframes.Length; i++)
+                {
+                    values[i * 3] = ch.Tangents![i].In;
+                    values[i * 3 + 1] = ch.Keyframes[i].Vector;
+                    values[i * 3 + 2] = ch.Tangents![i].Out;
+                }
+            }
+            else
+            {
+                values = ch.Keyframes.Select(x => x.Vector).ToArray();
+            }
+
+            var vecs = ctx.AddVector3(values, true, BufferTarget.Animation);
+
             samplers.Add(new JsonObject
             {
                 { "input", times },
-                { "interpolation", "LINEAR" },
+                { "interpolation", InterpString(ch.Interpolation) },
                 { "output", vecs },
             });
             channels.Add(new JsonObject
@@ -297,11 +338,25 @@ internal static class GLTFWriter
                 {
                     "target", new JsonObject
                     {
-                        { "node", mn.Value },
-                        { "path", "translation" }
+                        { "node", targetNode },
+                        { "path", path }
                     }
                 }
             });
+        }
+
+        foreach (var ch in anm.Translations)
+        {
+            var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
+            if (mn.Key == null) continue;
+            AddVectorChannel(ch, "translation", mn.Value);
+        }
+
+        foreach (var ch in anm.Scales)
+        {
+            var mn = ctx.NodeIndices.FirstOrDefault(x => x.Key.Name == ch.Target);
+            if (mn.Key == null) continue;
+            AddVectorChannel(ch, "scale", mn.Value);
         }
         json.Add("samplers", new JsonArray(samplers.ToArray()));
         json.Add("channels", new JsonArray(channels.ToArray()));
@@ -663,7 +718,7 @@ internal static class GLTFWriter
             return Accessors.Count - 1;
         }
 
-        public int AddQuaternions(Quaternion[] source)
+        public int AddVector4s(Vector4[] source)
         {
             var byteStart = (int)BufferWriter.BaseStream.Position;
             var byteLength = source.Length * 16;

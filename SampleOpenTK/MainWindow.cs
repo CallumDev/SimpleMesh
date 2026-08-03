@@ -118,11 +118,14 @@ namespace SampleOpenTK
             diffuseShader.SetI("mat_texture", 0);
             diffuseShader.SetI("mat_emissiveTexture", 1);
             diffuseShader.SetI("mat_normalTexture", 2);
+            diffuseShader.SetI("bonesTexture", 4);
             pbrShader = new Shader(VERTEX_SHADER, PBR_FRAGMENT_SHADER);
             pbrShader.SetI("mat_texture", 0);
             pbrShader.SetI("mat_emissiveTexture", 1);
             pbrShader.SetI("mat_normalTexture", 2);
             pbrShader.SetI("mat_metallicRoughnessTexture", 3);
+            pbrShader.SetI("bonesTexture", 4);
+
             //Setup null texture
             nullTexture = GL.GenTexture();
             uint white = 0xFFFFFFFF;
@@ -277,6 +280,32 @@ namespace SampleOpenTK
             }
         }
 
+
+        private int boneTexture = -1;
+        void UploadBones(ref SkinInstance? boundSkin, SkinInstance? currSkin)
+        {
+            if (currSkin != null && currSkin != boundSkin)
+            {
+                boundSkin = currSkin;
+                GL.ActiveTexture(TextureUnit.Texture4);
+                if (boneTexture == -1)
+                {
+                    boneTexture = GL.GenTexture();
+                    GL.BindTexture(TextureTarget.Texture2D, boneTexture);
+                    GL.TexImage2D(TextureTarget.Texture2D, 0,
+                        PixelInternalFormat.Rgba32f, 4, 1024, 0,
+                        PixelFormat.Rgba, PixelType.Float, 0);
+                    GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+                    GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+                    GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Clamp);
+                    GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Clamp);
+                }
+                GL.BindTexture(TextureTarget.Texture2D, boneTexture);
+                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, 4,
+                    currSkin.Matrices.Length, PixelFormat.Rgba, PixelType.Float, currSkin.Matrices);
+            }
+        }
+
         //Unsafe required to use System.Numerics under OpenTK
         unsafe void DrawNode(InstanceNode node, Matrix4x4 world, ref SkinInstance? boundSkin, ref int boundVao)
         {
@@ -302,12 +331,7 @@ namespace SampleOpenTK
                 }
                 diffuseShader.Set("UseSkinning", node.Skin != null);
                 pbrShader.Set("UseSkinning", node.Skin != null);
-                if (node.Skin != null && node.Skin != boundSkin)
-                {
-                    boundSkin = node.Skin;
-                    diffuseShader.SetSpan("Bones", node.Skin.Matrices);
-                    pbrShader.SetSpan("Bones", node.Skin.Matrices);
-                }
+                UploadBones(ref boundSkin, node.Skin);
 
 
                 foreach (var tg in geo.Groups)

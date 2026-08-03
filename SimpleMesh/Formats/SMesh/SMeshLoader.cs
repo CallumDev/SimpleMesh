@@ -151,6 +151,7 @@ namespace SimpleMesh.Formats.SMesh
                     {
                         var r = new RotationChannel();
                         r.Target = GetString(reader, strings)!;
+                        r.Interpolation = (AnimationInterpolation)reader.ReadByte();
                         r.Keyframes = new RotationKeyframe[(int)reader.ReadVarUInt32()];
                         for (int k = 0; k < r.Keyframes.Length; k++)
                         {
@@ -159,24 +160,29 @@ namespace SimpleMesh.Formats.SMesh
                                 reader.ReadSingle(), reader.ReadSingle(),
                                 reader.ReadSingle(), reader.ReadSingle());
                         }
+                        var tgcount = reader.ReadVarUInt32();
+                        if (tgcount > 0)
+                        {
+                            r.Tangents = new RotationTangent[tgcount - 1];
+                            for (int k = 0; k < r.Keyframes.Length; k++)
+                            {
+                                r.Tangents[k] = new(reader.ReadVector4(), reader.ReadVector4());
+                            }
+                        }
 
                         anm.Rotations[j] = r;
                     }
 
-                    anm.Translations = new TranslationChannel[(int)reader.ReadVarUInt32()];
+                    anm.Translations = new VectorChannel[(int)reader.ReadVarUInt32()];
                     for (int j = 0; j < anm.Translations.Length; j++)
                     {
-                        var t = new TranslationChannel();
-                        t.Target = GetString(reader, strings)!;
-                        t.Keyframes = new TranslationKeyframe[(int)reader.ReadVarUInt32()];
-                        for (int k = 0; k < t.Keyframes.Length; k++)
-                        {
-                            t.Keyframes[k].Time = reader.ReadSingle();
-                            t.Keyframes[k].Translation = new Vector3(reader.ReadSingle(), reader.ReadSingle(),
-                                reader.ReadSingle());
-                        }
+                        anm.Translations[j] = ReadVectorChannel(reader, strings);
+                    }
 
-                        anm.Translations[j] = t;
+                    anm.Scales = new VectorChannel[(int)reader.ReadVarUInt32()];
+                    for (int j = 0; j < anm.Scales.Length; j++)
+                    {
+                        anm.Scales[j] = ReadVectorChannel(reader, strings);
                     }
 
                     model.Animations[i] = anm;
@@ -184,6 +190,29 @@ namespace SimpleMesh.Formats.SMesh
             }
 
             return model;
+        }
+
+        static VectorChannel ReadVectorChannel(BinaryReader reader, string[] strings)
+        {
+            var t = new VectorChannel();
+            t.Target = GetString(reader, strings)!;
+            t.Interpolation = (AnimationInterpolation)reader.ReadByte();
+            t.Keyframes = new VectorKeyframe[(int)reader.ReadVarUInt32()];
+            for (int k = 0; k < t.Keyframes.Length; k++)
+            {
+                t.Keyframes[k].Time = reader.ReadSingle();
+                t.Keyframes[k].Vector = reader.ReadVector3();
+            }
+            var tgcount = reader.ReadVarUInt32();
+            if (tgcount > 0)
+            {
+                t.Tangents = new VectorTangent[tgcount - 1];
+                for (int i = 0; i < t.Tangents.Length; i++)
+                {
+                    t.Tangents[i] = new(reader.ReadVector3(), reader.ReadVector3());
+                }
+            }
+            return t;
         }
 
         static TextureInfo? ReadTexInfo(BinaryReader reader, string[] strings)

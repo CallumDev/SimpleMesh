@@ -30,7 +30,24 @@ uniform sampler2D Texture;
 uniform bool UseDiffuse;
 uniform bool UseSkinning;
 
-uniform mat4 Bones[32];
+uniform sampler2D bonesTexture;
+
+// these offsets assume the texture is 4 pixels across
+#define ROW0_U ((0.5 + 0.0) / 4.)
+#define ROW1_U ((0.5 + 1.0) / 4.)
+#define ROW2_U ((0.5 + 2.0) / 4.)
+#define ROW3_U ((0.5 + 3.0) / 4.)
+
+mat4 getBoneMatrix(int bone)
+{
+    float v = (float(bone) + 0.5) / 1024.0;
+
+    return mat4(
+        texture2D(bonesTexture, vec2(0.125, v)),
+        texture2D(bonesTexture, vec2(0.375, v)),
+        texture2D(bonesTexture, vec2(0.625, v)),
+        texture2D(bonesTexture, vec2(0.875, v)));
+}
 
 void main()
 {
@@ -44,10 +61,10 @@ void main()
     if(UseSkinning)
     {
         mat4 skinMat =
-            v_weights.x * Bones[v_joints.x] +
-            v_weights.y * Bones[v_joints.y] +
-            v_weights.z * Bones[v_joints.z] +
-            v_weights.w * Bones[v_joints.w];
+            v_weights.x * getBoneMatrix(v_joints.x) +
+            v_weights.y * getBoneMatrix(v_joints.y) +
+            v_weights.z * getBoneMatrix(v_joints.z) +
+            v_weights.w * getBoneMatrix(v_joints.w);
 
         vec4 sp = skinMat * vec4(v_position, 1.0);
         vec3 s_position = sp.xyz / sp.w;
@@ -81,7 +98,7 @@ void main()
 
         gl_Position = mvp * vec4(v_position, 1.0);
     }
-  
+
 }
 ";
 
@@ -252,7 +269,7 @@ void main()
     float alphaRoughness = perceptualRoughness * perceptualRoughness;
 
     vec4 baseColor = SRGBtoLinear(texture2D(mat_texture, texcoord[texcoord_diffuse])) * mat_diffuse * diffuse;
-    
+
     vec3 f0 = vec3(0.04);
     vec3 diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
     diffuseColor *= 1.0 - metallic;
@@ -306,7 +323,7 @@ void main()
 
     vec4 sampledEmissive = SRGBtoLinear(texture2D(mat_emissiveTexture, texcoord[texcoord_emissive]));
     vec4 emissive = vec4(mat_emissive * sampledEmissive.rgb, 1.0);
-    
+
     color += emissive.rgb;
 
     gl_FragColor = vec4(pow(color,vec3(1.0/2.2)), baseColor.a);
