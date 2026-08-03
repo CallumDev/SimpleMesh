@@ -10,7 +10,7 @@ namespace SimpleMesh.Util
     static class ParseHelpers
     {
         public record struct SplitElement(int Start, int Length);
-        
+
         static (int start, int len) TrimIndex(ReadOnlySpan<char> span)
         {
             int num = 0;
@@ -21,7 +21,7 @@ namespace SimpleMesh.Util
                 --index;
             return (num, index - num + 1);
         }
-        
+
         public static int FixedSplit(ReadOnlySpan<char> source, Span<SplitElement> elements)
         {
             if (source.Length == 0 || source.IsWhiteSpace())
@@ -95,7 +95,7 @@ namespace SimpleMesh.Util
                     {
                         if (elem >= floats.Length)
                             return int.MaxValue;
-                        if (!float.TryParse(trimmed, out floats[elem++]))
+                        if (!float.TryParse(trimmed, CultureInfo.InvariantCulture, out floats[elem++]))
                             return -1;
                     }
                     start = end;
@@ -103,13 +103,13 @@ namespace SimpleMesh.Util
             }
             return elem;
         }
-        
+
         public static string[] Tokens(string s) => s.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         public static float[] FloatArray(string s) => Tokens(s).Select((x) => float.Parse(x, CultureInfo.InvariantCulture)).ToArray();
         public static int[] IntArray(string s) => Tokens(s).Select((x) => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
-        
-        
-        
+
+
+
         public static bool TryParseColor(string s, out Vector4 col)
         {
             col = Vector4.One;
