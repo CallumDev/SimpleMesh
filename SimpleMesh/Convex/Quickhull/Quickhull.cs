@@ -712,7 +712,7 @@ class QuickhullCS
             if (face.Mark == Mark.NonConvex)
             {
                 face.Mark = Mark.Visible;
-                while (this.DoAdjacentMerge(face, MergeType.NonConvexWrtLargerFace)) {}
+                while (this.DoAdjacentMerge(face, MergeType.NonConvex)) {}
             }
         }
         debug("reassigning points to newFaces");
