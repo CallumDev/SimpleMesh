@@ -75,12 +75,43 @@ namespace SimpleMesh.Formats.Obj
                 geometries.Add(currentNode.Geometry);
             }
 
+            Dictionary<ObjVertex, uint> permutations = new();
+            void AddObjVertex(ObjVertex ov)
+            {
+                uint p;
+                if (ov is { Position: <= 1022, Normal: <= 1022, TexCoord: <= 1022 })
+                {
+                    p = 0x80000000u |
+                        ((uint)(ov.Position == -1 ? 1023 : ov.Position) << 20) |
+                        ((uint)(ov.Normal == -1 ? 1023 : ov.Normal) << 10) |
+                        (uint)(ov.TexCoord == -1 ? 1023 : ov.TexCoord);
+                }
+                else if (!permutations.TryGetValue(ov, out p))
+                {
+                    p = (uint)permutations.Count;
+                    permutations[ov] = p;
+                }
+                var v = new Vertex() {
+                    Position = positions[ov.Position], Diffuse = LinearColor.White
+                };
+                if (ov.Normal != -1) {
+                    attributes |= VertexAttributes.Normal;
+                    v.Normal = normals[ov.Normal];
+                }
+                if (ov.TexCoord != -1) {
+                    attributes |= VertexAttributes.Texture1;
+                    v.Texture1 = texcoords[ov.TexCoord];
+                }
+                currentGeometry.AddIndexed(p, ref v);
+            }
+
             while ((src_line = reader.ReadLine()) != null)
             {
                 var ln = src_line.AsSpan().Trim();
                 //skip empty line
                 if(ln.IsWhiteSpace()) continue;
                 ReadOnlySpan<char> param;
+
                 if (ln[0] == '#')
                 {
                     if (lineNo == 1)
@@ -202,19 +233,7 @@ namespace SimpleMesh.Formats.Obj
                     vtx = triangulatedElements.Slice(0, idxCount);
                     for (int i = 0; i < vtx.Length; i++)
                     {
-                        var ov = vtx[i];
-                        var v = new Vertex() {
-                            Position = positions[ov.Position], Diffuse = LinearColor.White
-                        };
-                        if (ov.Normal != -1) {
-                            attributes |= VertexAttributes.Normal;
-                            v.Normal = normals[ov.Normal];
-                        }
-                        if (ov.TexCoord != -1) {
-                            attributes |= VertexAttributes.Texture1;
-                            v.Texture1 = texcoords[ov.TexCoord];
-                        }
-                        currentGeometry.Add(ref v);
+                        AddObjVertex(vtx[i]);
                     }
                 }
                 else if (IsParam(ln, 'o') && GetParam(ln, out var objname))
@@ -242,15 +261,18 @@ namespace SimpleMesh.Formats.Obj
                         isL = isF = false;
                         currentGeometry = new GeometryBuilder(VertexAttributes.Normal | VertexAttributes.Texture1);
                         attributes = VertexAttributes.None;
+                        permutations = new();
                     }
                 }
                 else if (IsParam(ln, 'g'))
                 {
                     currentGeometry.AddGroup(GetMaterial(currentMaterial ?? "default"));
+                    permutations = new();
                 }
                 else if (StartsWithOrdinal(ln, "usemtl") && GetParam(ln, out param))
                 {
                     currentGeometry.AddGroup(GetMaterial(currentMaterial ?? "default"));
+                    permutations = new();
                     currentMaterial = param.ToString();
                 }
                 else if (StartsWithOrdinal(ln, "mtllib") && GetParam(ln, out param))
@@ -376,11 +398,37 @@ namespace SimpleMesh.Formats.Obj
             return vtx;
         }
 
-        struct ObjVertex
+
+        struct ObjVertex : IEquatable<ObjVertex>
         {
             public int Position;
             public int Normal;
             public int TexCoord;
+
+            public bool Equals(ObjVertex other)
+            {
+                return Position == other.Position && Normal == other.Normal && TexCoord == other.TexCoord;
+            }
+
+            public override bool Equals(object? obj)
+            {
+                return obj is ObjVertex other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                return HashCode.Combine(Position, Normal, TexCoord);
+            }
+
+            public static bool operator ==(ObjVertex left, ObjVertex right)
+            {
+                return left.Equals(right);
+            }
+
+            public static bool operator !=(ObjVertex left, ObjVertex right)
+            {
+                return !left.Equals(right);
+            }
         }
 
         static bool GetParam(ReadOnlySpan<char> s, out ReadOnlySpan<Char> param)
