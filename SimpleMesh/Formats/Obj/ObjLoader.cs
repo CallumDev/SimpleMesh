@@ -185,19 +185,7 @@ namespace SimpleMesh.Formats.Obj
                     }
                     for (int i = 0; i < vtx.Length; i++)
                     {
-                        var ov = vtx[i];
-                        var v = new Vertex() {
-                            Position = positions[ov.Position], Diffuse = LinearColor.White
-                        };
-                        if (ov.Normal != -1) {
-                            attributes |= VertexAttributes.Normal;
-                            v.Normal = normals[ov.Normal];
-                        }
-                        if (ov.TexCoord != -1) {
-                            attributes |= VertexAttributes.Texture1;
-                            v.Texture1 = texcoords[ov.TexCoord];
-                        }
-                        currentGeometry.Add(ref v);
+                        AddObjVertex(vtx[i]);
                     }
                 }
                 else if (IsParam(ln, 'f') && GetParam(ln, out param))
