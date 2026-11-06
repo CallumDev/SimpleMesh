@@ -252,6 +252,54 @@ namespace SimpleMesh.Formats.GLTF
                 };
             }
 
+            var cameras = Array.Empty<CameraProjection>();
+            if (jsonRoot.TryGetProperty("cameras", out var camerasElement))
+            {
+                k = 0;
+                cameras = new CameraProjection[camerasElement.GetArrayLength()];
+                foreach (var m in camerasElement.EnumerateArray())
+                {
+                    var c = new CameraProjection();
+                    ProjectionKind kind = ProjectionKind.Perspective;
+                    bool hasPerp = false;
+                    JsonElement perp;
+                    bool hasOrth = false;
+                    JsonElement orth;
+                    if (m.TryGetProperty("perspective", out perp))
+                    {
+                        hasPerp = true;
+                        kind = ProjectionKind.Perspective;
+                    }
+                    if (m.TryGetProperty("orthographic", out orth))
+                    {
+                        hasOrth = true;
+                        kind = ProjectionKind.Orthographic;
+                    }
+                    if (m.TryGetProperty("type", out var t))
+                    {
+                        if (Enum.TryParse<ProjectionKind>(t.GetString(), out var parsed))
+                            kind = parsed;
+                    }
+
+                    c.Kind = kind;
+                    if (hasOrth && c.Kind == ProjectionKind.Orthographic)
+                    {
+                        orth.TryGetSingleProperty("xmag", out c.X, 1f);
+                        orth.TryGetSingleProperty("ymag", out c.Y, 1f);
+                        orth.TryGetSingleProperty("znear", out c.ZNear, 0.001f);
+                        orth.TryGetSingleProperty("zfar", out c.ZFar, 10f);
+                    }
+                    if (hasPerp && c.Kind == ProjectionKind.Perspective)
+                    {
+                        perp.TryGetSingleProperty("aspectRatio", out c.AspectRatio);
+                        perp.TryGetSingleProperty("yfov", out c.Y);
+                        perp.TryGetSingleProperty("znear", out c.ZNear, 0.001f);
+                        perp.TryGetSingleProperty("zfar", out c.ZFar, float.PositiveInfinity);
+                    }
+                    cameras[k++] = c;
+                }
+            }
+
             //Load nodes and scene
             if (!jsonRoot.TryGetProperty("nodes", out var nodesElement)) {
                 throw new ModelLoadException("glTF file contains no objects");
@@ -278,6 +326,8 @@ namespace SimpleMesh.Formats.GLTF
                     nodes[k].Geometry = meshes[meshElement.GetInt32()];
                 if (n.TryGetProperty("skin", out var skinElem))
                     nodes[k].Skin = skinElem.GetInt32();
+                if (n.TryGetProperty("camera", out var cameraElem))
+                    nodes[k].Camera = cameraElem.GetInt32();
                 string errName = string.IsNullOrEmpty(nodes[k].Name) ? "NONAME" : $"'{nodes[k].Name}'";
                 if (n.TryGetProperty("matrix", out var matrixElement))
                 {
@@ -407,7 +457,7 @@ namespace SimpleMesh.Formats.GLTF
             for (int i = 0; i < model.Roots.Length; i++)
             {
                 model.Roots[i] = GetNode(nodes, scenes[sceneIndex].Nodes[i], refGeometry, refMaterial, concreteNodes,
-                    skinarray, allSkins);
+                    skinarray, allSkins, cameras);
             }
             for (int i = 0; i < allSkins.Length; i++)
             {
@@ -434,7 +484,7 @@ namespace SimpleMesh.Formats.GLTF
         }
 
         static ModelNode GetNode(GLTFNode[] nodes, int index, List<Geometry> refGeometry, List<Material> refMaterial,
-            ModelNode[] concreteNodes, GLTFSkin[] skinSource, Skin?[] skinArray)
+            ModelNode[] concreteNodes, GLTFSkin[] skinSource, Skin?[] skinArray, CameraProjection[] cameras)
         {
             var m = new ModelNode();
             concreteNodes[index] = m;
@@ -446,6 +496,10 @@ namespace SimpleMesh.Formats.GLTF
                 skinArray[s] ??= new Skin()
                     { Name = skinSource[s].Name, InverseBindMatrices = skinSource[s].InverseBindMatrices };
                 m.Skin = skinArray[s];
+            }
+            if (nodes[index].Camera != null)
+            {
+                m.Camera = cameras[nodes[index].Camera!.Value];
             }
             if (m.Geometry != null && !refGeometry.Contains(m.Geometry))
             {
@@ -459,7 +513,7 @@ namespace SimpleMesh.Formats.GLTF
             m.Transform = nodes[index].Transform;
             foreach(var child in nodes[index].Children)
             {
-                m.Children.Add(GetNode(nodes, child, refGeometry, refMaterial, concreteNodes, skinSource, skinArray));
+                m.Children.Add(GetNode(nodes, child, refGeometry, refMaterial, concreteNodes, skinSource, skinArray, cameras));
             }
             return m;
         }
@@ -483,6 +537,7 @@ namespace SimpleMesh.Formats.GLTF
             public Matrix4x4 Transform = Matrix4x4.Identity;
             public Geometry? Geometry;
             public int? Skin;
+            public int? Camera;
             public List<int> Children = new List<int>();
             public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
         }

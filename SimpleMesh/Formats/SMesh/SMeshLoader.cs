@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Numerics;
+using System.Runtime.Serialization;
 using SimpleMesh.Util;
 
 namespace SimpleMesh.Formats.SMesh
@@ -66,7 +67,7 @@ namespace SimpleMesh.Formats.SMesh
 
             model.Skins = new Skin[(int)reader.ReadVarUInt32()];
             var refs = new SkinRefs[model.Skins.Length];
-            for (int i = 0; i < model.Geometries.Length; i++)
+            for (int i = 0; i < model.Skins.Length; i++)
             {
                 // Concrete data
                 model.Skins[i] = new();
@@ -275,6 +276,18 @@ namespace SimpleMesh.Formats.SMesh
             if (s != 0)
             {
                 node.Skin = skins[s - 1];
+            }
+
+            var cam = reader.ReadByte();
+            if (cam != 0)
+            {
+                var kind = (ProjectionKind)(cam >> 1);
+                node.Camera = new CameraProjection() { Kind = kind };
+                node.Camera.X = reader.ReadSingle();
+                node.Camera.Y = reader.ReadSingle();
+                node.Camera.AspectRatio = reader.ReadSingle();
+                node.Camera.ZNear = reader.ReadSingle();
+                node.Camera.ZFar = reader.ReadSingle();
             }
 
             var childCount = (int)reader.ReadVarUInt32();

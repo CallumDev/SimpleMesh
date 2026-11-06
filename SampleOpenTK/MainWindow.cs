@@ -45,6 +45,7 @@ namespace SampleOpenTK
         private float zoom = 1;
         private float modelRadius = 1;
         private Dictionary<VertexAttributes, VertexBuffer> buffers = new();
+        private InstanceNode? cameraNode;
 
         private bool pbrEnabled = true;
         private bool hasPbr = false;
@@ -59,14 +60,18 @@ namespace SampleOpenTK
                 openfile = FilePicker.OpenFile();
                 if (openfile != null)
                 {
+                    #if !DEBUG
                     try
                     {
+                    #endif
                         LoadModel(openfile);
+                    #if !DEBUG
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine(e);
                     }
+                    #endif
                 }
             });
             saveButton = new Button("Save To Binary", 5, 40, () =>
@@ -211,14 +216,11 @@ namespace SampleOpenTK
                 buttons.Add(pbrButton);
             }
             int y = 5;
-            if (m.Animations != null)
+            foreach (var anim in m.Animations.Take(16))
             {
-                foreach (var anim in m.Animations.Take(16))
-                {
-                    buttons.Add(new Button(anim.Name ?? "ANIMATION", 200, y,
-                        () => { instance!.Animator.Instances.Add(new AnimationInstance(anim)); }));
-                    y += 35;
-                }
+                buttons.Add(new Button(anim.Name ?? "ANIMATION", 200, y,
+                    () => { instance!.Animator.Instances.Add(new AnimationInstance(anim)); }));
+                y += 35;
             }
 
             modelRadius = 0;
@@ -232,17 +234,44 @@ namespace SampleOpenTK
 
             model = m;
             instance = new ModelInstance(m);
+            cameraNode = null;
 
             if(instance.HasScale)
                 buttons.Add(removeScale);
+
+
+
+            if (instance.Cameras.Length > 0)
+            {
+                buttons.Add(new Button("Default Camera", 5, 180, () => cameraNode = null));
+                y = 180 + 35;
+                int i = 0;
+                foreach (var c in instance.Cameras)
+                {
+                    var n = string.IsNullOrWhiteSpace(c.Node.Name) ? $"camera{i++}" : c.Node.Name;
+                    buttons.Add(new Button(n, 5, y, () =>
+                    {
+                        cameraNode = c;
+                        c.PrintCamera();
+                    }));
+                    y += 35;
+                }
+            }
+            pbrButton = new Button("PBR Enabled", 5, 145, () =>
+            {
+                pbrEnabled = !pbrEnabled;
+                pbrButton!.Text = pbrEnabled ? "PBR Enabled" : "PBR Disabled";
+            });
         }
+
+
 
         void LoadModel(string filename)
         {
             var sw = Stopwatch.StartNew();
             List<string> warnings = [];
             var m = Model.FromFile(filename, warnings)
-                .AutoselectRoot(out _) //try discard empty nodes at root (think blender cameras etc.)
+                .AutoselectRoot(out _, true) //try discard empty nodes at root
                 .MergeTriangleGroups() //merge drawcalls of same material in a Geometry
                 .CalculateNormals() // Calculate missing normals
                 .CalculateTangents(false, true) // Calculate missing tangents
@@ -429,12 +458,16 @@ namespace SampleOpenTK
             if (instance != null)
             {
                 //generate camera matrix based off model dimensions
-                var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60),
+                var projection = Matrix4x4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60),
                     (float)Size.X / Size.Y,
                     0.02f, Math.Min(10000, modelRadius * 60));
-                var campos = new Vector3(0, 0, (-modelRadius * 4) * zoom);
-                var view = Matrix4.LookAt(campos, Vector3.Zero, Vector3.UnitY);
+                var campos = new System.Numerics.Vector3(0, 0, (-modelRadius * 4) * zoom);
+                var view = Matrix4x4.CreateLookAt(campos, System.Numerics.Vector3.Zero, System.Numerics.Vector3.UnitY);
                 var vp = view * projection;
+                if (cameraNode != null)
+                {
+                    vp = cameraNode.ViewMatrix() * cameraNode.ProjectionMatrix(Size.X, Size.Y);
+                }
                 diffuseShader.Set("viewprojection", vp);
                 var mscale = modelRadius / 500.0f;
                 if (mscale < 1)
@@ -454,7 +487,11 @@ namespace SampleOpenTK
                 SkinInstance? boundSkin = null;
                 for (int i = 0; i < instance.Roots.Length; i++)
                 {
-                    DrawNode(instance.Roots[i], Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX),
+                    var modelMatrix = cameraNode != null
+                        ? Matrix4x4.Identity
+                        : Matrix4x4.CreateRotationY(rotateY) * Matrix4x4.CreateRotationX(rotateX);
+
+                    DrawNode(instance.Roots[i], modelMatrix,
                         ref boundSkin,
                         ref boundVao);
                 }

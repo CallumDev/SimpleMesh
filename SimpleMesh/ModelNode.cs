@@ -8,10 +8,11 @@ namespace SimpleMesh
     {
         public string Name = "";
         public Matrix4x4 Transform = Matrix4x4.Identity;
+        public CameraProjection? Camera;
         public Geometry? Geometry;
+        public Skin? Skin;
         public List<ModelNode> Children = new List<ModelNode>();
         public Dictionary<string, PropertyValue> Properties = new Dictionary<string, PropertyValue>();
-        public Skin? Skin;
 
         internal ModelNode Clone(Model newModel, Model existingModel)
         {
@@ -26,6 +27,7 @@ namespace SimpleMesh
                 else
                     mn.Geometry = Geometry.Clone(newModel);
             }
+            mn.Camera = Camera?.Clone();
             mn.Children = new List<ModelNode>();
             foreach(var c in Children)
                 mn.Children.Add(c.Clone(newModel, existingModel));

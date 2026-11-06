@@ -37,7 +37,7 @@ namespace SimpleMesh
             return FromStream(stream, new FileResources(filename), warnings);
         }
 
-        public Model AutoselectRoot(out bool success)
+        public Model AutoselectRoot(out bool success, bool allowCameras = false)
         {
             if (Roots.Length <= 1)
             {
@@ -48,7 +48,8 @@ namespace SimpleMesh
             int withGeometry = -1;
             for (int i = 0; i < Roots.Length; i++)
             {
-                if (HasGeometry(Roots[i]))
+                if (HasGeometry(Roots[i]) ||
+                    (allowCameras && HasCamera(Roots[i])))
                 {
                     if (withGeometry == -1) withGeometry = i;
                     else
@@ -178,6 +179,17 @@ namespace SimpleMesh
             foreach (var child in node.Children)
             {
                 if (HasGeometry(child)) return true;
+            }
+
+            return false;
+        }
+
+        static bool HasCamera(ModelNode node)
+        {
+            if (node.Camera != null) return true;
+            foreach (var child in node.Children)
+            {
+                if (HasCamera(child)) return true;
             }
 
             return false;

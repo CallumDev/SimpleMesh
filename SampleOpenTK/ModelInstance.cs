@@ -12,6 +12,7 @@ public class ModelInstance
     public AnimationHandler Animator = new();
     public InstanceNode[] Roots;
     public SkinInstance[] Skins;
+    public InstanceNode[] Cameras;
 
     // Scale component
     public bool HasScale = false;
@@ -20,11 +21,14 @@ public class ModelInstance
     {
         Dictionary<ModelNode, InstanceNode> instances = new();
         Dictionary<Skin, SkinInstance> skinInstances = new();
+        List<InstanceNode> cams = new();
         Roots = new InstanceNode[model.Roots.Length];
         for (int i = 0; i < Roots.Length; i++)
         {
-            Roots[i] = AddNode(model.Roots[i], instances);
+            Roots[i] = AddNode(model.Roots[i], instances, cams);
         }
+
+        Cameras = cams.ToArray();
         Skins = new SkinInstance[model.Skins.Length];
         for (int i = 0; i < model.Skins.Length; i++)
         {
@@ -37,9 +41,11 @@ public class ModelInstance
             {
                 si.Bones[j] = instances[model.Skins[i].Bones[j]];
             }
+
             skinInstances[model.Skins[i]] = si;
             Skins[i] = si;
         }
+
         foreach (var kv in instances)
         {
             if (kv.Key.Skin != null)
@@ -47,6 +53,7 @@ public class ModelInstance
                 kv.Value.Skin = skinInstances[kv.Key.Skin];
             }
         }
+
         UpdateTransforms();
     }
 
@@ -86,6 +93,7 @@ public class ModelInstance
         {
             selfTransform = node.Node.Transform;
         }
+
         node.Transform = selfTransform * parent;
         foreach (var c in node.Children)
         {
@@ -93,7 +101,7 @@ public class ModelInstance
         }
     }
 
-    InstanceNode AddNode(ModelNode node, Dictionary<ModelNode, InstanceNode> instances)
+    InstanceNode AddNode(ModelNode node, Dictionary<ModelNode, InstanceNode> instances, List<InstanceNode> cams)
     {
         if (Matrix4x4.Decompose(node.Transform, out var scale, out _, out _) &&
             Math.Abs(scale.X - 1) > 1e-6 &&
@@ -102,10 +110,13 @@ public class ModelInstance
         {
             HasScale = true;
         }
+
         var n = new InstanceNode(node);
         instances[node] = n;
-        foreach(var c in node.Children)
-            n.Children.Add(AddNode(c, instances));
+        if (node.Camera != null)
+            cams.Add(n);
+        foreach (var c in node.Children)
+            n.Children.Add(AddNode(c, instances, cams));
         return n;
     }
 }
@@ -116,4 +127,87 @@ public class InstanceNode(ModelNode node)
     public ModelNode Node = node;
     public SkinInstance? Skin;
     public List<InstanceNode> Children = [];
+
+    public void PrintCamera()
+    {
+        if(node.Camera == null)
+            Console.WriteLine("Null Camera");
+        Console.WriteLine($"{node.Camera.Kind} X: {node.Camera.X} Y: {node.Camera.Y} Aspect: {node.Camera.AspectRatio} Near: {node.Camera.ZNear} Far: {node.Camera.ZFar}");
+        var m = Matrix4x4.Decompose(Transform, out _, out var r, out var t);
+        Console.WriteLine($"Translation: {t}, Rotation: {r}");
+    }
+
+    public Matrix4x4 ViewMatrix()
+    {
+        var success = Matrix4x4.Invert(Transform, out var inv);
+        return success ? inv : Matrix4x4.Identity;
+    }
+
+    public Matrix4x4 ProjectionMatrix(float width, float height)
+    {
+        return node.Camera?.CreateProjectionMatrix(width, height)
+               ?? Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 3f, width / height,
+                   0.01f, 100);
+    }
+
+    /// <summary>
+    /// Calculates an orthographic projection matrix.
+    /// </summary>
+    /// <param name="xmag">Magnification in the X axis.</param>
+    /// <param name="ymag">Magnification in the Y axis.</param>
+    /// <param name="znear">Distance to the near pane in the Z axis.</param>
+    /// <param name="zfar">Distance to the far plane in the Z axis.</param>
+    /// <returns>A projection matrix</returns>
+    static Matrix4x4 CreateOrthographicMatrix(float xmag, float ymag, float znear, float zfar)
+    {
+        var d = znear - zfar;
+
+        var x = 1 / xmag;
+        var y = 1 / ymag;
+        var z = 2 / d;
+        var w = (zfar + znear) / d;
+
+        return new Matrix4x4
+        (
+            x, 0, 0, 0,
+            0, y, 0, 0,
+            0, 0, z, 0,
+            0, 0, w, 1
+        );
+    }
+
+    /// <summary>
+    /// Calculates a perspective projection matrix.
+    /// </summary>
+    /// <param name="aspectRatio">The aspect ratio between horizontal and vertical. (optional)</param>
+    /// <param name="yfov">The vertical field of view, in radians.</param>
+    /// <param name="znear">Distance to the near pane in the Z axis.</param>
+    /// <param name="zfar">Distance to the far plane in the Z axis. Optionally, this value can be positive infinity</param>
+    /// <returns>A projection matrix</returns>
+    static Matrix4x4 CreatePerspectiveMatrix(float aspectRatio, float yfov, float znear,
+        float zfar = float.PositiveInfinity)
+    {
+       var v = (float)Math.Tan(0.5 * yfov);
+       var h = aspectRatio * v;
+
+       var x = 1 / h;
+       var y = 1 / v;
+       var z = -1f;
+       var w = -2 * znear;
+
+       if (!float.IsPositiveInfinity(zfar))
+       {
+           var d = znear - zfar;
+           z = (zfar + znear) / d;
+           w = (2f * zfar * znear) / d;
+       }
+
+       return new Matrix4x4
+       (
+           x, 0, 0, 0,
+           0, y, 0, 0,
+           0, 0, z, -1,
+           0, 0, w, 0
+       );
+    }
 }

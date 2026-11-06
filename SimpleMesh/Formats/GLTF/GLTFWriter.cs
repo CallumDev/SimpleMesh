@@ -105,6 +105,11 @@ internal static class GLTFWriter
 
     private static int CreateGeometry(string name, Geometry g, GLTFContext ctx)
     {
+        if (ctx.GeometryIndices.TryGetValue(g, out var idx))
+        {
+            return idx;
+        }
+        ctx.GeometryIndices[g] = ctx.Geometries.Count;
         var attributes = new List<(string name, int index)>();
         attributes.Add(("POSITION", ctx.AddVector3(g.Vertices.Position, true, BufferTarget.Vertex)));
         if (g.Has(VertexAttributes.Normal))
@@ -166,9 +171,10 @@ internal static class GLTFWriter
             if (translation != Vector3.Zero)
                 json.Add("translation", new JsonArray(translation.X, translation.Y, translation.Z));
         }
-
         if (n.Geometry != null)
             json.Add("mesh", CreateGeometry(n.Name, n.Geometry, ctx));
+        if(n.Camera != null)
+            json.Add("camera", ctx.AddCamera(n.Camera));
         if (n.Skin != null)
         {
             var idx = Array.IndexOf(m.Skins, n.Skin);
@@ -407,17 +413,25 @@ internal static class GLTFWriter
         }));
         foreach (var r in model.Roots)
             CreateNode(r, model, ctx);
-        json.Add("nodes", new JsonArray(ctx.Nodes));
-        json.Add("materials", new JsonArray(jsonMats.ToArray()));
-        json.Add("meshes", new JsonArray(ctx.Geometries.ToArray()));
-        if (model.Animations is { Length: >0 })
-        {
-            var anms = new JsonArray(model.Animations.Select(x => CreateAnimationNode(x, ctx)).ToArray());
-            json.Add("animations", anms);
-        }
 
-        json.Add("accessors", new JsonArray(ctx.Accessors.ToArray()));
-        json.Add("bufferViews", new JsonArray(ctx.BufferViews.ToArray()));
+        void AddCollection(string name, List<JsonObject> objects)
+        {
+            if (objects.Count > 0)
+            {
+                var n = new JsonNode[objects.Count];
+                for (int i = 0; i < objects.Count; i++)
+                    n[i] = objects[i];
+                json.Add(name, new JsonArray(n));
+            }
+        }
+        json.Add("nodes", new JsonArray(ctx.Nodes));
+        if(jsonMats.Count > 0)
+            json.Add("materials", new JsonArray(jsonMats.ToArray()));
+        AddCollection("meshes", ctx.Geometries);
+        AddCollection("animations", model.Animations.Select(x => CreateAnimationNode(x, ctx)).ToList());
+        AddCollection("cameras", ctx.Cameras);
+        AddCollection("accessors", ctx.Accessors);
+        AddCollection("bufferViews", ctx.BufferViews);
         if (isGLB)
         {
             //Prepare data
@@ -476,8 +490,10 @@ internal static class GLTFWriter
         public readonly List<JsonObject> BufferViews = new();
         public BinaryWriter BufferWriter = bufferWriter;
         public readonly List<JsonObject> Geometries = new();
+        public readonly List<JsonObject> Cameras = new();
         public readonly Dictionary<Material, int> MaterialIndices = new();
         public readonly Dictionary<ModelNode, int> NodeIndices = nodeIndices;
+        public readonly Dictionary<Geometry, int> GeometryIndices = new();
         public JsonObject[] Nodes = nodes;
 
 
@@ -523,6 +539,39 @@ internal static class GLTFWriter
         {
             while (BufferWriter.BaseStream.Position % 4 != 0)
                 BufferWriter.Write((byte)0);
+        }
+
+        public int AddCamera(CameraProjection camera)
+        {
+            var json = new JsonObject()
+            {
+                { "znear", camera.ZNear },
+            };
+            if (!float.IsPositiveInfinity(camera.ZFar))
+            {
+                json.Add("zfar", camera.ZFar);
+            }
+            if (camera.Kind == ProjectionKind.Orthographic)
+            {
+                json.Add("xmag", camera.X);
+                json.Add("ymag", camera.Y);
+            }
+            else
+            {
+                if (camera.AspectRatio > 0)
+                {
+                    json.Add("aspectRatio", camera.AspectRatio);
+                }
+                json.Add("yfov", camera.Y);
+            }
+            var typeString = camera.Kind == ProjectionKind.Perspective ? "perspective" : "orthographic";
+            var parent = new JsonObject()
+            {
+                { "type",  typeString },
+                { typeString, json }
+            };
+            Cameras.Add(parent);
+            return Cameras.Count - 1;
         }
 
         public int AddVector3(Vector3[] source, bool position, BufferTarget target)

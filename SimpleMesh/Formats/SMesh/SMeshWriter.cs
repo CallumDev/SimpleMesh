@@ -388,6 +388,21 @@ namespace SimpleMesh.Formats.SMesh
                 }
             }
 
+            if (n.Camera == null)
+            {
+                writer.Write((byte)0);
+            }
+            else
+            {
+                var k = ((int)n.Camera.Kind << 1) | 1;
+                writer.Write((byte)k);
+                writer.Write(n.Camera.X);
+                writer.Write(n.Camera.Y);
+                writer.Write(n.Camera.AspectRatio);
+                writer.Write(n.Camera.ZNear);
+                writer.Write(n.Camera.ZFar);
+            }
+
             writer.WriteVarUInt32((uint)n.Children.Count);
             foreach (var child in n.Children)
             {

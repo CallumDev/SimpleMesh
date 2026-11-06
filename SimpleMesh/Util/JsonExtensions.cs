@@ -14,4 +14,17 @@ static class JsonExtensions
         value = prop.GetString();
         return value != null;
     }
+
+    public static bool TryGetSingleProperty(this JsonElement element, string propertyName, out float value, float def = 0)
+    {
+        value = def;
+        if (!element.TryGetProperty(propertyName, out var prop))
+            return false;
+        if (!prop.TryGetSingle(out value))
+        {
+            value = def;
+            return false;
+        }
+        return true;
+    }
 }
