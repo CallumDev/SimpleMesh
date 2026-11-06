@@ -197,7 +197,7 @@ namespace SimpleMesh.Formats.GLTF
                             v.JointIndices = accessors[jointIndex].GetUShort4((int)index);
                             v.JointWeights = accessors[weightIndex].GetVector4((int)index);
                         }
-                        geometry.Add(ref v);
+                        geometry.AddIndexed(index, ref v);
                     }
                 }
                 else

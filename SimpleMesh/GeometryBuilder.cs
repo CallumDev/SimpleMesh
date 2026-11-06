@@ -18,11 +18,61 @@ namespace SimpleMesh
         private int startIndex = 0;
         private bool finished = false;
 
+        private bool fastAdd = true;
+        private HashSet<int> hashes = new();
+        private Dictionary<uint, uint> remapped = new();
+
+        /// <summary>
+        /// Adds unindexed vertex data, building an index buffer.
+        /// </summary>
         public void Add(ref Vertex vert)
         {
             if (finished)
                 throw new InvalidOperationException("GeometryBuilder already finished.");
             indices.Add((uint)(impl.Add(ref vert) - impl.BaseVertex));
+        }
+
+        /// <summary>
+        /// Adds data using a source index as a cache key, remapping the index buffer.
+        /// Optimistically assumes vertex data is not duplicated
+        /// </summary>
+        public void AddIndexed(uint srcIndex, ref Vertex vert)
+        {
+            if (finished)
+                throw new InvalidOperationException("GeometryBuilder already finished.");
+            indices.Add(AddFast(srcIndex, ref vert));
+        }
+
+        uint AddFast(uint srcIndex, ref Vertex vert)
+        {
+            if (!remapped.TryGetValue(srcIndex, out var mapped))
+            {
+                if (fastAdd)
+                {
+                    if (!hashes.Add(vert.GetHashCode()))
+                    {
+                        // potential of needing to dedup, switch to slow path
+                        fastAdd = false;
+                        impl.BuildIndexLookupFromDirect();
+                        mapped = (uint)(impl.Add(ref vert) - impl.BaseVertex);
+                        remapped[srcIndex] = mapped;
+                    }
+                    else
+                    {
+                        // no dedup needed yet, add to array directly.
+                        mapped = (uint)(impl.VertexCount - impl.BaseVertex);
+                        impl.AddDirect(ref vert);
+                        remapped[srcIndex] = mapped;
+                    }
+                }
+                else
+                {
+                    mapped = (uint)(impl.Add(ref vert) - impl.BaseVertex);
+                    remapped[srcIndex] = mapped;
+                }
+            }
+
+            return mapped;
         }
 
 
@@ -40,6 +90,9 @@ namespace SimpleMesh
             });
             startIndex = indices.Count;
             impl.Chunk();
+            fastAdd = true;
+            hashes = new();
+            remapped = new();
         }
 
         public Geometry Finish()
@@ -69,10 +122,13 @@ namespace SimpleMesh
 
         interface IBuilderImpl
         {
+            void AddDirect(ref Vertex vert);
+            void BuildIndexLookupFromDirect();
             void Chunk();
             int Add(ref Vertex vert);
             VertexArray Finish();
             int BaseVertex { get; }
+            int VertexCount { get; }
         }
 
         abstract class BuilderImpl<T> : IBuilderImpl where T : notnull
@@ -80,9 +136,9 @@ namespace SimpleMesh
             Dictionary<T, int> indices = new Dictionary<T, int>();
             private VertexArray array;
             private int vertexCount = 0;
-            private List<T> all = [];
 
             public int BaseVertex { get; private set; }
+            public int VertexCount => vertexCount;
 
             protected BuilderImpl(VertexAttributes attributes)
             {
@@ -95,12 +151,29 @@ namespace SimpleMesh
                 BaseVertex = vertexCount;
             }
 
+            public void AddDirect(ref Vertex vert)
+            {
+                if (vertexCount + 1 >= array.Count) {
+                    array.Resize(array.Count * 2);
+                }
+                array.Vertices[vertexCount++] = vert;
+            }
+
+            public void BuildIndexLookupFromDirect()
+            {
+                for (int i = BaseVertex; i < vertexCount; i++)
+                {
+                    var v = array.Vertices[i];
+                    var lookup = FromVertex(ref v);
+                    indices[lookup] = i;
+                }
+            }
+
             public int Add(ref Vertex vert)
             {
                 var v = FromVertex(ref vert);
                 if (!indices.TryGetValue(v, out int idx))
                 {
-                    all.Add(v);
                     if (vertexCount + 1 >= array.Count) {
                         array.Resize(array.Count * 2);
                     }
