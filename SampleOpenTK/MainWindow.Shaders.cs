@@ -146,7 +146,7 @@ void main()
     vec3 emissive = mat_emissive * sampledEmissive.rgb;
     // old-style non-pbr lighting.
     float NdotL = clamp(dot(norm, -light_direction), 0.001, 1.0);
-    vec3 col = emissive + NdotL * baseColor.rgb;
+    vec3 col = emissive + NdotL * baseColor.rgb + (baseColor.rgb * vec3(0.1, 0.1, 0.1)); //add ambient term
     gl_FragColor = vec4(col.rgb, baseColor.a);
 }
 ";
@@ -272,6 +272,7 @@ void main()
 
     vec3 f0 = vec3(0.04);
     vec3 diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
+    vec3 ambientColor = baseColor.rgb * vec3(0.1, 0.1, 0.1);
     diffuseColor *= 1.0 - metallic;
     vec3 specularColor = mix(f0, baseColor.rgb, metallic);
 
@@ -319,7 +320,7 @@ void main()
     // Calculation of analytical lighting contribution
     vec3 diffuseContrib = (1.0 - F) * diffuseLambert(pbrInputs);
     vec3 specContrib = F * G * D / (4.0 * NdotL * NdotV);
-    vec3 color = NdotL * vec3(1.0) * (diffuseContrib + specContrib); //lightColor hardcode to 1.0
+    vec3 color = NdotL * vec3(1.0) * (diffuseContrib + specContrib) + ambientColor; //lightColor hardcode to 1.0
 
     vec4 sampledEmissive = SRGBtoLinear(texture2D(mat_emissiveTexture, texcoord[texcoord_emissive]));
     vec4 emissive = vec4(mat_emissive * sampledEmissive.rgb, 1.0);
